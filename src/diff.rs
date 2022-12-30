@@ -23,6 +23,25 @@ fn diff_grants(
     (grants_to_add, grants_to_remove)
 }
 
+fn diff_grant<T: PartialEq + Clone>(new_grants: Vec<T>, old_grants: Vec<T>) -> (Vec<T>, Vec<T>) {
+    let mut grants_to_add: Vec<T> = Vec::new();
+    let mut grants_to_remove: Vec<T> = Vec::new();
+
+    for new_grant in &new_grants {
+        if !old_grants.contains(new_grant) {
+            grants_to_add.push(new_grant.clone());
+        }
+    }
+
+    for old_grant in old_grants {
+        if !new_grants.contains(&old_grant) {
+            grants_to_remove.push(old_grant);
+        }
+    }
+
+    (grants_to_add, grants_to_remove)
+}
+
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_eq;
