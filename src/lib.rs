@@ -1,32 +1,41 @@
+use std::borrow::Cow;
+
+mod diff;
+
+#[derive(Debug, PartialEq)]
 pub enum GrantType {
-    Read,
-    Write,
+    // TODO: Break apart grants into types by object
+    Connect,
+    Temp,
+    Create,
+    Select,
+    Insert,
+    Update,
+    Delete,
     All,
 }
 
 impl GrantType {
-    fn to_postgres_table_permission(&self) -> &'static str {
+    fn to_postgres_permission(&self) -> &'static str {
         match self {
-            GrantType::Read => "SELECT",
-            GrantType::Write => "SELECT, INSERT, UPDATE, DELETE",
-            GrantType::All => "ALL",
-        }
-    }
-
-    fn to_postgres_database_permission(&self) -> &'static str {
-        match self {
-            GrantType::Read => "CONNECT",
-            GrantType::Write => "CONNECT, TEMPORARY, CREATE",
+            GrantType::Select => "SELECT",
+            GrantType::Insert => "INSERT",
+            GrantType::Update => "UPDATE",
+            GrantType::Delete => "DELETE",
+            GrantType::Connect => "CONNECT",
+            GrantType::Temp => "TEMP",
+            GrantType::Create => "CREATE",
             GrantType::All => "ALL",
         }
     }
 }
 
-pub struct TableGrant<'a> {
+#[derive(Debug, PartialEq)]
+pub struct TableGrant {
     grant_type: GrantType,
-    table_name: Option<&'a str>,
-    schema_name: &'a str,
-    roles: Vec<&'a str>,
+    table_name: Option<String>,
+    schema_name: String,
+    roles: Vec<String>,
     with_grant_option: bool,
 }
 
@@ -55,7 +64,7 @@ impl<'a> DatabaseGrant<'a> {
     pub fn to_sql(&self) -> String {
         let mut sql = format!(
             "GRANT {} ON DATABASE {} TO {}",
-            self.grant_type.to_postgres_database_permission(),
+            self.grant_type.to_postgres_permission(),
             self.database_name,
             self.roles.join(", ")
         );
@@ -68,19 +77,19 @@ impl<'a> DatabaseGrant<'a> {
     }
 }
 
-impl<'a> TableGrant<'a> {
+impl TableGrant {
     pub fn new(
         grant_type: GrantType,
-        table_name: Option<&'a str>,
-        schema_name: &'a str,
-        roles: Vec<&'a str>,
+        table_name: Option<Cow<'static, str>>,
+        schema_name: Cow<'static, str>,
+        roles: Vec<Cow<'static, str>>,
         with_grant_option: bool,
     ) -> Self {
         Self {
             grant_type,
-            table_name,
-            schema_name,
-            roles,
+            table_name: table_name.map(|t| t.into_owned()),
+            schema_name: schema_name.into_owned(),
+            roles: roles.into_iter().map(|r| r.into_owned()).collect(),
             with_grant_option,
         }
     }
@@ -88,14 +97,14 @@ impl<'a> TableGrant<'a> {
         let mut query = match self.table_name {
             Some(ref table_name) => format!(
                 "GRANT {} ON TABLE {}.{} TO {}",
-                self.grant_type.to_postgres_table_permission(),
+                self.grant_type.to_postgres_permission(),
                 self.schema_name,
                 table_name,
                 self.roles.join(", "),
             ),
             None => format!(
                 "GRANT {} ON ALL TABLES IN SCHEMA {} TO {}",
-                self.grant_type.to_postgres_table_permission(),
+                self.grant_type.to_postgres_permission(),
                 self.schema_name,
                 self.roles.join(", "),
             ),
@@ -116,10 +125,10 @@ mod tests {
     #[test]
     fn test_table_grant() {
         let grant = TableGrant::new(
-            GrantType::Read,
-            Some("users"),
-            "public",
-            vec!["user"],
+            GrantType::Select,
+            Some("users".into()),
+            "public".into(),
+            vec!["user".into()],
             false,
         );
 
@@ -128,7 +137,13 @@ mod tests {
 
     #[test]
     fn test_table_grant_all() {
-        let grant = TableGrant::new(GrantType::Read, None, "public", vec!["user"], false);
+        let grant = TableGrant::new(
+            GrantType::All,
+            None,
+            "public".into(),
+            vec!["user".into()],
+            false,
+        );
 
         assert_eq!(
             grant.to_sql(),
@@ -139,10 +154,10 @@ mod tests {
     #[test]
     fn test_table_grant_with_grant_option() {
         let grant = TableGrant::new(
-            GrantType::Read,
-            Some("users"),
-            "public",
-            vec!["user_1", "user_2"],
+            GrantType::Select,
+            Some("users".into()),
+            "public".into(),
+            vec!["user_1".into(), "user_2".into()],
             true,
         );
 
@@ -155,7 +170,7 @@ mod tests {
     #[test]
     fn test_database_grant() {
         let grant = DatabaseGrant::new(
-            GrantType::Read,
+            GrantType::Select,
             "my_database",
             vec!["user_1", "user_2"],
             false,
@@ -170,7 +185,7 @@ mod tests {
     #[test]
     fn test_database_grant_with_grant_option() {
         let grant = DatabaseGrant::new(
-            GrantType::Write,
+            GrantType::Connect,
             "my_database",
             vec!["user_1", "user_2"],
             true,
@@ -178,7 +193,7 @@ mod tests {
 
         assert_eq!(
             grant.to_sql(),
-            "GRANT CONNECT, TEMPORARY, CREATE ON DATABASE my_database TO user_1, user_2 WITH GRANT OPTION"
+            "GRANT CONNECT ON DATABASE my_database TO user_1, user_2 WITH GRANT OPTION"
         );
     }
 
