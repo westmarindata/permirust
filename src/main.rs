@@ -1,27 +1,14 @@
-use permirust::{DatabaseGrant, GrantType, TableGrant};
+use permirust::grants::{PostgresPrivileges, TableGrant};
 
 fn main() {
     let table_grant = TableGrant::new(
-        GrantType::Read,
-        Some("users"),
-        "public",
-        vec!["user"],
+        PostgresPrivileges::Select,
+        Some("users".into()),
+        "public".into(),
+        vec!["user".into()],
         false,
     );
 
-    let sql = table_grant.to_sql();
+    let sql: String = table_grant.into();
     println!("{}", sql);
-
-    let table_grant = TableGrant::new(GrantType::Write, None, "public", vec!["user"], true);
-
-    let sql = table_grant.to_sql();
-    println!("{}", sql);
-
-    let db_grant = DatabaseGrant::new(
-        GrantType::Read,
-        "my_database",
-        vec!["user_1", "user_2"],
-        false,
-    );
-    println!("{}", db_grant.to_sql());
 }
