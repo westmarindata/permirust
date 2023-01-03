@@ -1,5 +1,7 @@
 use std::{borrow::Cow, fmt, str::FromStr};
 
+type Sql = String;
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PostgresPrivileges {
     // TODO: Break apart grants into types by object
@@ -113,6 +115,21 @@ pub struct TableGrant {
     with_grant_option: bool,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct SchemaGrant {
+    grant_type: PostgresPrivileges,
+    schema_name: String,
+    roles: Vec<String>,
+    with_grant_option: bool,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct RoleGrant {
+    role_name: String,
+    roles: Vec<String>,
+    with_admin_option: bool,
+}
+
 impl DatabaseGrant {
     const VALID_PERMISSIONS: &'static [PostgresPrivileges] = &[
         PostgresPrivileges::Connect,
@@ -138,9 +155,17 @@ impl DatabaseGrant {
     }
 }
 
-type Sql = String;
-
 impl TableGrant {
+    const VALID_PERMISSIONS: &'static [PostgresPrivileges] = &[
+        PostgresPrivileges::Select,
+        PostgresPrivileges::Insert,
+        PostgresPrivileges::Update,
+        PostgresPrivileges::Delete,
+        PostgresPrivileges::Truncate,
+        PostgresPrivileges::References,
+        PostgresPrivileges::Trigger,
+        PostgresPrivileges::All,
+    ];
     pub fn new(
         grant_type: PostgresPrivileges,
         table_name: Option<Cow<'static, str>>,
@@ -148,12 +173,17 @@ impl TableGrant {
         roles: Vec<Cow<'static, str>>,
         with_grant_option: bool,
     ) -> Self {
-        Self {
-            grant_type,
-            table_name: table_name.map(|t| t.into_owned()),
-            schema_name: schema_name.into_owned(),
-            roles: roles.into_iter().map(|r| r.into_owned()).collect(),
-            with_grant_option,
+        {
+            if !Self::VALID_PERMISSIONS.contains(&grant_type) {
+                panic!("Invalid permission for table grant: {}", grant_type);
+            }
+            Self {
+                grant_type,
+                table_name: table_name.map(|t| t.into_owned()),
+                schema_name: schema_name.into_owned(),
+                roles: roles.into_iter().map(|r| r.into_owned()).collect(),
+                with_grant_option,
+            }
         }
     }
 }
@@ -195,6 +225,39 @@ impl From<TableGrant> for Sql {
 
         if grant.with_grant_option {
             sql.push_str(" WITH GRANT OPTION");
+        };
+
+        sql
+    }
+}
+
+impl From<SchemaGrant> for Sql {
+    fn from(grant: SchemaGrant) -> Self {
+        let mut sql = format!(
+            "GRANT {} ON SCHEMA {} TO {}",
+            grant.grant_type,
+            grant.schema_name,
+            grant.roles.join(", ")
+        );
+
+        if grant.with_grant_option {
+            sql.push_str(" WITH GRANT OPTION");
+        };
+
+        sql
+    }
+}
+
+impl From<RoleGrant> for Sql {
+    fn from(grant: RoleGrant) -> Self {
+        let mut sql = format!(
+            "GRANT {} TO ROLE {}",
+            grant.role_name,
+            grant.roles.join(", ")
+        );
+
+        if grant.with_admin_option {
+            sql.push_str(" WITH ADMIN OPTION");
         };
 
         sql
