@@ -58,7 +58,8 @@ mod tests {
             "public".into(),
             vec!["user1".into()],
             false,
-        );
+        )
+        .unwrap();
 
         let insert = TableGrant::new(
             PostgresPrivileges::Insert,
@@ -66,7 +67,8 @@ mod tests {
             "public".into(),
             vec!["user1".into()],
             false,
-        );
+        )
+        .unwrap();
 
         let update = TableGrant::new(
             PostgresPrivileges::Update,
@@ -74,7 +76,8 @@ mod tests {
             "public".into(),
             vec!["user1".into()],
             false,
-        );
+        )
+        .unwrap();
 
         let delete = TableGrant::new(
             PostgresPrivileges::Delete,
@@ -82,7 +85,8 @@ mod tests {
             "public".into(),
             vec!["user1".into()],
             false,
-        );
+        )
+        .unwrap();
 
         let new_grants = vec![select.clone(), insert.clone(), update.clone()];
 
@@ -105,7 +109,8 @@ mod tests {
             "public".into(),
             vec!["user1".into()],
             false,
-        );
+        )
+        .unwrap();
 
         let new_grant = vec![select.clone()];
 

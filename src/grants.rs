@@ -1,4 +1,5 @@
-use std::{borrow::Cow, fmt, str::FromStr};
+use anyhow::{bail, Result};
+use std::{fmt, str::FromStr};
 
 type Sql = String;
 
@@ -39,7 +40,7 @@ impl fmt::Display for PostgresPrivileges {
             PostgresPrivileges::Truncate => write!(f, "TRUNCATE"),
             PostgresPrivileges::Update => write!(f, "UPDATE"),
             PostgresPrivileges::Usage => write!(f, "USAGE"),
-            PostgresPrivileges::All => write!(f, "ALL"),
+            PostgresPrivileges::All => write!(f, "ALL PRIVILEGES"),
         }
     }
 }
@@ -142,16 +143,16 @@ impl DatabaseGrant {
         database_name: String,
         roles: Vec<String>,
         with_grant_option: bool,
-    ) -> Self {
+    ) -> Result<Self> {
         if !Self::VALID_PERMISSIONS.contains(&grant_type) {
-            panic!("Invalid permission for database grant: {}", grant_type);
+            bail!("Invalid permission for database grant: {}", grant_type);
         }
-        Self {
+        Ok(Self {
             grant_type,
             database_name,
             roles,
             with_grant_option,
-        }
+        })
     }
 }
 
@@ -168,22 +169,22 @@ impl TableGrant {
     ];
     pub fn new(
         grant_type: PostgresPrivileges,
-        table_name: Option<Cow<'static, str>>,
-        schema_name: Cow<'static, str>,
-        roles: Vec<Cow<'static, str>>,
+        table_name: Option<String>,
+        schema_name: String,
+        roles: Vec<String>,
         with_grant_option: bool,
-    ) -> Self {
+    ) -> Result<TableGrant> {
         {
             if !Self::VALID_PERMISSIONS.contains(&grant_type) {
-                panic!("Invalid permission for table grant: {}", grant_type);
+                bail!("Invalid permission for table grant: {}", grant_type);
             }
-            Self {
+            Ok(Self {
                 grant_type,
-                table_name: table_name.map(|t| t.into_owned()),
-                schema_name: schema_name.into_owned(),
-                roles: roles.into_iter().map(|r| r.into_owned()).collect(),
+                table_name,
+                schema_name,
+                roles,
                 with_grant_option,
-            }
+            })
         }
     }
 }
@@ -268,17 +269,73 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_table_grant() {
-        let grant = TableGrant::new(
-            PostgresPrivileges::Select,
-            Some("users".into()),
-            "public".into(),
+    fn test_database_grants_connect() {
+        let grant = DatabaseGrant::new(
+            PostgresPrivileges::Connect,
+            "my_database".into(),
+            vec!["user_1".into(), "user_2".into()],
+            false,
+        );
+
+        assert_eq!(
+            Sql::from(grant.unwrap()),
+            "GRANT CONNECT ON DATABASE my_database TO user_1, user_2"
+        );
+    }
+
+    #[test]
+    fn test_database_grant_with_grant_option() {
+        let grant = DatabaseGrant::new(
+            PostgresPrivileges::Connect,
+            "my_database".into(),
+            vec!["user_1".into(), "user_2".into()],
+            true,
+        );
+
+        assert_eq!(
+            Sql::from(grant.unwrap()),
+            "GRANT CONNECT ON DATABASE my_database TO user_1, user_2 WITH GRANT OPTION"
+        );
+    }
+
+    #[test]
+    fn test_database_grant_all() {
+        let grant = DatabaseGrant::new(
+            PostgresPrivileges::All,
+            "my_database".into(),
             vec!["user".into()],
             false,
         );
 
         assert_eq!(
-            Sql::from(grant),
+            Sql::from(grant.unwrap()),
+            "GRANT ALL PRIVILEGES ON DATABASE my_database TO user"
+        );
+    }
+
+    #[test]
+    fn test_database_invalid_grant() {
+        let grant = DatabaseGrant::new(
+            PostgresPrivileges::Insert,
+            "my_database".into(),
+            vec!["user".into()],
+            false,
+        );
+
+        assert!(grant.is_err())
+    }
+    #[test]
+    fn test_table_grant() {
+        let grant = TableGrant::new(
+            PostgresPrivileges::Select,
+            Some("users".to_string()),
+            "public".to_string(),
+            vec!["user".to_string()],
+            false,
+        );
+
+        assert_eq!(
+            Sql::from(grant.unwrap()),
             "GRANT SELECT ON TABLE public.users TO user"
         );
     }
@@ -294,7 +351,7 @@ mod tests {
         );
 
         assert_eq!(
-            Sql::from(grant),
+            Sql::from(grant.unwrap()),
             "GRANT SELECT ON ALL TABLES IN SCHEMA public TO user"
         );
     }
@@ -303,60 +360,14 @@ mod tests {
     fn test_table_grant_with_grant_option() {
         let grant = TableGrant::new(
             PostgresPrivileges::Select,
-            Some("users".into()),
-            "public".into(),
+            Some("users".to_string()),
+            "public".to_string(),
             vec!["user_1".into(), "user_2".into()],
             true,
         );
-
         assert_eq!(
-            Sql::from(grant),
+            Sql::from(grant.unwrap()),
             "GRANT SELECT ON TABLE public.users TO user_1, user_2 WITH GRANT OPTION"
-        );
-    }
-
-    #[test]
-    fn test_database_grant() {
-        let grant = DatabaseGrant::new(
-            PostgresPrivileges::Connect,
-            "my_database".into(),
-            vec!["user_1".into(), "user_2".into()],
-            false,
-        );
-
-        assert_eq!(
-            Sql::from(grant),
-            "GRANT CONNECT ON DATABASE my_database TO user_1, user_2"
-        );
-    }
-
-    #[test]
-    fn test_database_grant_with_grant_option() {
-        let grant = DatabaseGrant::new(
-            PostgresPrivileges::Connect,
-            "my_database".into(),
-            vec!["user_1".into(), "user_2".into()],
-            true,
-        );
-
-        assert_eq!(
-            Sql::from(grant),
-            "GRANT CONNECT ON DATABASE my_database TO user_1, user_2 WITH GRANT OPTION"
-        );
-    }
-
-    #[test]
-    fn test_database_grant_all() {
-        let grant = DatabaseGrant::new(
-            PostgresPrivileges::All,
-            "my_database".into(),
-            vec!["user".into()],
-            false,
-        );
-
-        assert_eq!(
-            Sql::from(grant),
-            "GRANT ALL ON DATABASE my_database TO user"
         );
     }
 }

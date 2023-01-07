@@ -9,6 +9,6 @@ fn main() {
         false,
     );
 
-    let sql: String = table_grant.into();
+    let sql: String = table_grant.unwrap().into();
     println!("{}", sql);
 }
