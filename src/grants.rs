@@ -108,6 +108,14 @@ pub struct DatabaseGrant {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub struct SchemaGrant {
+    grant_type: PostgresPrivileges,
+    schema_name: String,
+    roles: Vec<String>,
+    with_grant_option: bool,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct TableGrant {
     grant_type: PostgresPrivileges,
     table_name: Option<String>,
@@ -117,13 +125,22 @@ pub struct TableGrant {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct SchemaGrant {
+pub struct SequenceGrant {
     grant_type: PostgresPrivileges,
+    sequence_name: Option<String>,
     schema_name: String,
     roles: Vec<String>,
     with_grant_option: bool,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct DomainGrant {
+    grant_type: PostgresPrivileges,
+    domain_name: String,
+    schema_name: String,
+    roles: Vec<String>,
+    with_grant_option: bool,
+}
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RoleGrant {
     role_name: String,
@@ -189,12 +206,83 @@ impl TableGrant {
     }
 }
 
+impl SequenceGrant {
+    const VALID_PERMISSIONS: &'static [PostgresPrivileges] = &[
+        PostgresPrivileges::Usage,
+        PostgresPrivileges::Select,
+        PostgresPrivileges::Update,
+        PostgresPrivileges::All,
+    ];
+    pub fn new(
+        grant_type: PostgresPrivileges,
+        sequence_name: Option<String>,
+        schema_name: String,
+        roles: Vec<String>,
+        with_grant_option: bool,
+    ) -> Result<SequenceGrant> {
+        {
+            if !Self::VALID_PERMISSIONS.contains(&grant_type) {
+                bail!("Invalid permission for sequence grant: {}", grant_type);
+            }
+            Ok(Self {
+                grant_type,
+                sequence_name,
+                schema_name,
+                roles,
+                with_grant_option,
+            })
+        }
+    }
+}
+
+impl DomainGrant {
+    const VALID_PERMISSIONS: &'static [PostgresPrivileges] =
+        &[PostgresPrivileges::Usage, PostgresPrivileges::All];
+    pub fn new(
+        grant_type: PostgresPrivileges,
+        domain_name: String,
+        schema_name: String,
+        roles: Vec<String>,
+        with_grant_option: bool,
+    ) -> Result<DomainGrant> {
+        {
+            if !Self::VALID_PERMISSIONS.contains(&grant_type) {
+                bail!("Invalid permission for domain grant: {}", grant_type);
+            }
+            Ok(Self {
+                grant_type,
+                domain_name,
+                schema_name,
+                roles,
+                with_grant_option,
+            })
+        }
+    }
+}
+
 impl From<DatabaseGrant> for Sql {
     fn from(grant: DatabaseGrant) -> Self {
         let mut sql = format!(
             "GRANT {} ON DATABASE {} TO {}",
             grant.grant_type,
             grant.database_name,
+            grant.roles.join(", ")
+        );
+
+        if grant.with_grant_option {
+            sql.push_str(" WITH GRANT OPTION");
+        };
+
+        sql
+    }
+}
+
+impl From<SchemaGrant> for Sql {
+    fn from(grant: SchemaGrant) -> Self {
+        let mut sql = format!(
+            "GRANT {} ON SCHEMA {} TO {}",
+            grant.grant_type,
+            grant.schema_name,
             grant.roles.join(", ")
         );
 
@@ -232,12 +320,39 @@ impl From<TableGrant> for Sql {
     }
 }
 
-impl From<SchemaGrant> for Sql {
-    fn from(grant: SchemaGrant) -> Self {
+impl From<SequenceGrant> for Sql {
+    fn from(grant: SequenceGrant) -> Self {
+        let mut sql = match grant.sequence_name {
+            Some(sequence) => format!(
+                "GRANT {} ON SEQUENCE {}.{} TO {}",
+                grant.grant_type,
+                grant.schema_name,
+                sequence,
+                grant.roles.join(", ")
+            ),
+            None => format!(
+                "GRANT {} ON ALL SEQUENCES IN SCHEMA {} TO {}",
+                grant.grant_type,
+                grant.schema_name,
+                grant.roles.join(", ")
+            ),
+        };
+
+        if grant.with_grant_option {
+            sql.push_str(" WITH GRANT OPTION");
+        };
+
+        sql
+    }
+}
+
+impl From<DomainGrant> for Sql {
+    fn from(grant: DomainGrant) -> Self {
         let mut sql = format!(
-            "GRANT {} ON SCHEMA {} TO {}",
+            "GRANT {} ON DOMAIN {}.{} TO {}",
             grant.grant_type,
             grant.schema_name,
+            grant.domain_name,
             grant.roles.join(", ")
         );
 
@@ -368,6 +483,54 @@ mod tests {
         assert_eq!(
             Sql::from(grant.unwrap()),
             "GRANT SELECT ON TABLE public.users TO user_1, user_2 WITH GRANT OPTION"
+        );
+    }
+
+    #[test]
+    fn test_sequence_grant() {
+        let grant = SequenceGrant::new(
+            PostgresPrivileges::Select,
+            Some("users".to_string()),
+            "public".to_string(),
+            vec!["user".to_string()],
+            false,
+        );
+
+        assert_eq!(
+            Sql::from(grant.unwrap()),
+            "GRANT SELECT ON SEQUENCE public.users TO user"
+        );
+    }
+
+    #[test]
+    fn test_sequence_grant_select_to_all() {
+        let grant = SequenceGrant::new(
+            PostgresPrivileges::Select,
+            None,
+            "public".into(),
+            vec!["user".into()],
+            false,
+        );
+
+        assert_eq!(
+            Sql::from(grant.unwrap()),
+            "GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO user"
+        );
+    }
+
+    #[test]
+    fn test_domain_grant() {
+        let grant = DomainGrant::new(
+            PostgresPrivileges::Usage,
+            "users".to_string(),
+            "public".to_string(),
+            vec!["user".to_string()],
+            false,
+        );
+
+        assert_eq!(
+            Sql::from(grant.unwrap()),
+            "GRANT USAGE ON DOMAIN public.users TO user"
         );
     }
 }
