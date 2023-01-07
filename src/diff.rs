@@ -1,29 +1,8 @@
-use crate::grants::TableGrant;
-
 #[allow(dead_code)]
-fn diff_grants(
-    new_grants: Vec<TableGrant>,
-    old_grants: Vec<TableGrant>,
-) -> (Vec<TableGrant>, Vec<TableGrant>) {
-    let mut grants_to_add: Vec<TableGrant> = Vec::new();
-    let mut grants_to_remove: Vec<TableGrant> = Vec::new();
-
-    for new_grant in &new_grants {
-        if !old_grants.contains(new_grant) {
-            grants_to_add.push(new_grant.clone());
-        }
-    }
-
-    for old_grant in old_grants {
-        if !new_grants.contains(&old_grant) {
-            grants_to_remove.push(old_grant);
-        }
-    }
-
-    (grants_to_add, grants_to_remove)
-}
-
-fn diff_grant<T: PartialEq + Clone>(new_grants: Vec<T>, old_grants: Vec<T>) -> (Vec<T>, Vec<T>) {
+pub fn diff_grant<T: PartialEq + Clone>(
+    new_grants: Vec<T>,
+    old_grants: Vec<T>,
+) -> (Vec<T>, Vec<T>) {
     let mut grants_to_add: Vec<T> = Vec::new();
     let mut grants_to_remove: Vec<T> = Vec::new();
 
@@ -46,7 +25,7 @@ fn diff_grant<T: PartialEq + Clone>(new_grants: Vec<T>, old_grants: Vec<T>) -> (
 mod tests {
     use pretty_assertions::assert_eq;
 
-    use crate::grants::PostgresPrivileges;
+    use crate::grants::{PostgresPrivileges, TableGrant};
 
     use super::*;
 
@@ -96,7 +75,7 @@ mod tests {
 
         let grants_to_remove = vec![delete];
 
-        let (res_add, res_remove) = diff_grants(new_grants, old_grants);
+        let (res_add, res_remove) = diff_grant(new_grants, old_grants);
         assert_eq!(res_add, grants_to_add);
         assert_eq!(res_remove, grants_to_remove);
     }
@@ -114,7 +93,7 @@ mod tests {
 
         let new_grant = vec![select.clone()];
 
-        let res_add = diff_grants(new_grant.clone(), vec![]);
+        let res_add = diff_grant(new_grant.clone(), vec![]);
         assert_eq!(new_grant, res_add.0);
     }
 }
