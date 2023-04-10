@@ -11,3 +11,6 @@ pretty_assertions = "1"
 
 [dependencies]
 anyhow = "1.0.68"
+chrono = "0.4.24"
+clap = { version = "4.2.1", features = ["derive"] }
+postgres = { version = "0.19.5", features = ["with-chrono-0_4"] }

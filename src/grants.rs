@@ -381,7 +381,7 @@ impl From<RoleGrant> for Sql {
 }
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::grants::*;
 
     #[test]
     fn test_database_grants_connect() {

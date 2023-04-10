@@ -25,9 +25,8 @@ pub fn diff_grant<T: PartialEq + Clone>(
 mod tests {
     use pretty_assertions::assert_eq;
 
+    use crate::diff::diff_grant;
     use crate::grants::{PostgresPrivileges, TableGrant};
-
-    use super::*;
 
     #[test]
     fn test_diff_grants() {
