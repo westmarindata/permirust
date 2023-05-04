@@ -7,12 +7,16 @@ roles:
     is_superuser: no
     member_of:
       - analyst
+
+  analyst:
+    can_login: yes
+    is_superuser: no
     owns:
       schemas:
-        - finance_reports
+        - finance
       tables:
-        - finance_reports.Q2_revenue
-        - finance_rerports.Q2_margin
+        - finance.Q2_revenue
+        - finance.Q2_margin
     privileges:
       schemas:
         read:

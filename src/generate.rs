@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+use core::fmt;
+
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use postgres::Client;
@@ -9,9 +11,13 @@ pub fn generate_spec(client: &mut Client) -> Result<()> {
     let memberships = get_all_memberships(client);
     let obj_permissions = get_obj_permissions_by_role(client);
 
-    println!("{:?}", roles);
-    println!("{:?}", memberships);
-    println!("{:?}", obj_permissions);
+    roles.iter().for_each(|role| println!("{}", role));
+    memberships
+        .iter()
+        .for_each(|membership| println!("{}", membership));
+    obj_permissions
+        .iter()
+        .for_each(|obj_permission| println!("{}", obj_permission));
 
     return Ok(());
 }
@@ -30,10 +36,26 @@ pub struct PostgresRole {
     validuntil: Option<DateTime<Utc>>,
 }
 
+impl fmt::Display for PostgresRole {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "<Role> {} enabled: {} superuser: {}",
+            self.name, self.canlogin, self.superuser
+        )
+    }
+}
+
 #[derive(Debug)]
 pub struct PostgresMembership {
     member: String,
     group: String,
+}
+
+impl fmt::Display for PostgresMembership {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<Membership> {}->{}", self.member, self.group)
+    }
 }
 
 #[derive(Debug)]
@@ -43,6 +65,20 @@ pub struct GranteePrivileges {
     schema: String,
     unqualified_name: Option<String>,
     privilege_type: String,
+}
+
+impl fmt::Display for GranteePrivileges {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "<GranteePrivileges> {} {} {} {} {}",
+            self.grantee,
+            self.objkind,
+            self.schema,
+            self.unqualified_name.as_ref().unwrap_or(&"".to_string()),
+            self.privilege_type
+        )
+    }
 }
 
 fn get_role_attributes(client: &mut Client) -> Vec<PostgresRole> {

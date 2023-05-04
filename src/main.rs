@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use permirust::generate::generate_spec;
-use permirust::grants::{PostgresPrivileges, TableGrant};
 use postgres::{Client, NoTls};
 
 #[derive(Parser)]
@@ -32,19 +31,6 @@ enum Commands {
 }
 
 fn main() {
-    // This does nothing
-    let table_grant = TableGrant::new(
-        PostgresPrivileges::Select,
-        Some("users".into()),
-        "public".into(),
-        vec!["user".into()],
-        false,
-    );
-
-    let sql: String = table_grant.unwrap().into();
-    println!("{}", sql);
-
-    // Code starts here ---
     let cli = Cli::parse();
 
     if let Some(spec) = cli.spec.as_deref() {
@@ -71,6 +57,7 @@ fn main() {
                 NoTls,
             )
             .unwrap();
+            // TODO: Quit more gracefully when client fails
             println!("Generating...");
             generate_spec(&mut client).unwrap();
         }
