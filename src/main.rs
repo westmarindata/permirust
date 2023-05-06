@@ -31,6 +31,7 @@ enum Commands {
 }
 
 fn main() {
+    env_logger::init();
     let cli = Cli::parse();
 
     if let Some(spec) = cli.spec.as_deref() {

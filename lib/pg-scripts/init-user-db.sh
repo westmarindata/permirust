@@ -19,5 +19,9 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
 
     CREATE SEQUENCE reports.Q2_revenue_seq;
 
+    ALTER DEFAULT PRIVILEGES IN SCHEMA finance GRANT ALL PRIVILEGES ON TABLES TO analyst;
+
+    GRANT SELECT ON finance.Q2_revenue TO analyst;
+    GRANT analyst TO jdoe;
 EOSQL
 
