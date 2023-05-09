@@ -60,7 +60,7 @@ fn main() {
             .unwrap();
             // TODO: Quit more gracefully when client fails
             println!("Generating...");
-            generate_spec(&mut client).unwrap();
+            let _ = generate_spec(&mut client);
         }
         None => println!("No subcommand was used"),
     }

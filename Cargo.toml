@@ -16,4 +16,6 @@ clap = { version = "4.2.1", features = ["derive"] }
 env_logger = "0.10.0"
 log = "0.4.17"
 postgres = { version = "0.19.5", features = ["with-chrono-0_4"] }
+serde = { version = "1.0.162", features = ["derive"] }
+serde_yaml = "0.9.21"
 test-log = "0.2.11"
