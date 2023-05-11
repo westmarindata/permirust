@@ -1,53 +1,14 @@
-#![allow(dead_code)]
 use crate::context::Context;
 use crate::context::PostgresContext;
-use crate::context::PostgresRoleAttributes;
 use crate::spec::DatabasePermission;
 use crate::spec::Ownership;
 use crate::spec::Privileges;
 use crate::spec::Role;
-use log::{debug, error};
+use log::{debug, error, info};
 use std::collections::HashMap;
 
 use anyhow::Result;
 use postgres::Client;
-
-#[derive(Debug)]
-pub struct ReadWritePermissions {
-    read: Vec<String>,
-    write: Vec<String>,
-}
-
-#[derive(Debug)]
-pub struct RoleSpec {
-    name: String,
-    enabled: bool,
-    superuser: bool,
-    attributes: PostgresRoleAttributes,
-    memberships: Vec<String>,
-    owns: Vec<ObjectSpec>,
-    privileges: HashMap<String, Vec<ReadWritePermissions>>,
-}
-
-impl RoleSpec {
-    fn new(name: String) -> Self {
-        RoleSpec {
-            name: name.clone(),
-            enabled: false,
-            superuser: false,
-            attributes: PostgresRoleAttributes::new(name.clone()),
-            memberships: Vec::new(),
-            owns: Vec::new(),
-            privileges: HashMap::new(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct ObjectSpec {
-    objkind: String,
-    name: String,
-}
 
 pub fn generate_spec(_client: &mut Client) -> Result<DatabasePermission> {
     let mut db_spec = DatabasePermission {
@@ -55,11 +16,19 @@ pub fn generate_spec(_client: &mut Client) -> Result<DatabasePermission> {
         adapter: "postgres".to_string(),
         roles: HashMap::new(),
     };
-    println!("Generated spec: {:?}", db_spec.roles);
-    let context = &mut PostgresContext::new();
-    db_spec.roles = add_attributes(db_spec.roles, context);
-    db_spec.roles = add_memberships(db_spec.roles, context);
-    db_spec.roles = add_ownerships(db_spec.roles, context);
+    let mut context = match db_spec.adapter.as_str() {
+        "postgres" => {
+            info!("Generating spec for postgres.");
+            PostgresContext::new()
+        }
+        _ => {
+            error!("Unsupported adapter: {}", db_spec.adapter);
+            panic!();
+        }
+    };
+    db_spec.roles = add_attributes(db_spec.roles, &mut context);
+    db_spec.roles = add_memberships(db_spec.roles, &mut context);
+    db_spec.roles = add_ownerships(db_spec.roles, &mut context);
 
     match db_spec.to_yaml() {
         Ok(yaml) => println!("{}", yaml),
@@ -68,7 +37,7 @@ pub fn generate_spec(_client: &mut Client) -> Result<DatabasePermission> {
         }
     };
 
-    return Ok(db_spec);
+    Ok(db_spec)
 }
 
 fn add_attributes(
@@ -141,60 +110,8 @@ fn add_ownerships(
 // tests
 #[cfg(test)]
 mod tests {
-    use postgres::NoTls;
-
-    use crate::context::PostgresMembership;
-
     use super::*;
     use test_log::test;
-
-    fn client() -> Client {
-        Client::connect(
-            "host=localhost port=54321 user=postgres password=password",
-            NoTls,
-        )
-        .unwrap()
-    }
-
-    struct MockContext {
-        roles: Vec<RoleSpec>,
-        members: Vec<PostgresMembership>,
-    }
-
-    impl MockContext {
-        fn new(roles: Vec<RoleSpec>, members: Vec<PostgresMembership>) -> Self {
-            MockContext { roles, members }
-        }
-    }
-
-    impl Context for MockContext {
-        fn get_role_attributes(&mut self) -> Vec<PostgresRoleAttributes> {
-            self.roles
-                .iter()
-                .map(|role| PostgresRoleAttributes::new(role.name.clone()))
-                .collect()
-        }
-
-        fn get_all_memberships(&mut self) -> Vec<PostgresMembership> {
-            self.members.clone()
-        }
-
-        fn get_obj_permissions_by_role(&mut self) -> Vec<crate::context::GranteePrivileges> {
-            vec![]
-        }
-
-        fn get_default_permissions(&mut self) -> Vec<crate::context::DefaultAccessPrivileges> {
-            vec![]
-        }
-
-        fn get_raw_object_attributes(&mut self) -> Vec<crate::context::RawObjectAttribute> {
-            vec![]
-        }
-
-        fn get_ownerships(&mut self) -> Vec<crate::context::PostgresOwnership> {
-            vec![]
-        }
-    }
 
     #[test]
     fn test_add_attributes() {
@@ -215,29 +132,6 @@ mod tests {
         let res = add_memberships(spec, context);
         let jdoe = res.get("jdoe").unwrap();
         assert!(jdoe.member_of[0].contains(&"analyst".to_string()));
-    }
-
-    #[test]
-    fn test_add_memberships_mock() {
-        let roles = vec![
-            RoleSpec::new("foo".to_string()),
-            RoleSpec::new("bar".to_string()),
-            RoleSpec::new("baz".to_string()),
-        ];
-
-        let memberships = vec![
-            PostgresMembership::new("foo".into(), "bar".into()),
-            PostgresMembership::new("foo".into(), "baz".into()),
-            PostgresMembership::new("bar".into(), "baz".into()),
-        ];
-
-        let spec = HashMap::new();
-        let context = &mut MockContext::new(roles, memberships);
-        let spec = add_attributes(spec, context);
-        let spec = add_memberships(spec, context);
-        assert!(spec.get("foo").unwrap().member_of[0].contains(&"bar".to_string()));
-        assert!(spec.get("foo").unwrap().member_of[1].contains(&"baz".to_string()));
-        assert!(spec.get("bar").unwrap().member_of[0].contains(&"baz".to_string()));
     }
 
     #[test]

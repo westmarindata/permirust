@@ -1,4 +1,4 @@
-pub const Q_ALL_MEMBERSHIPS: &'static str = "
+pub const Q_ALL_MEMBERSHIPS: &str = "
 SELECT
   auth_member.rolname AS member,
   auth_group.rolname AS group
@@ -7,7 +7,7 @@ JOIN pg_authid auth_member ON link_table.member = auth_member.oid
 JOIN pg_authid auth_group ON link_table.roleid = auth_group.oid
 ";
 
-pub const Q_OBJ_PERMISSIONS_BY_ROLE: &'static str = "
+pub const Q_OBJ_PERMISSIONS_BY_ROLE: &str = "
 WITH
   relkind_mapping (objkey, objkind) AS (
       VALUES ('r', 'tables'),
@@ -59,7 +59,7 @@ WITH
       WHERE combined.owner != t_grantee.rolname
 ";
 
-pub const Q_GET_ROLE_ATTRIBUTES: &'static str = "
+pub const Q_GET_ROLE_ATTRIBUTES: &str = "
 SELECT
   rolname,
   rolbypassrls,
@@ -75,7 +75,7 @@ FROM pg_authid
 WHERE rolname != 'pg_signal_backend'
 ";
 
-pub const Q_GET_DEFAULT_PERMISSIONS: &'static str = " WITH relkind_mapping (objkey, objkind) AS (
+pub const Q_GET_DEFAULT_PERMISSIONS: &str = " WITH relkind_mapping (objkey, objkind) AS (
         VALUES ('f', 'functions'),
                ('r', 'tables'),
                ('S', 'sequences'),
@@ -112,7 +112,7 @@ pub const Q_GET_DEFAULT_PERMISSIONS: &'static str = " WITH relkind_mapping (objk
     WHERE
         subq.grantor_oid != subq.grantee_oid
     ";
-pub const Q_RAW_OBJECT_ATTRIBUTES: &'static str = "
+pub const Q_RAW_OBJECT_ATTRIBUTES: &str = "
     WITH relkind_mapping (objkey, kind) AS (
         VALUES ('r', 'tables'),
                ('v', 'tables'),

@@ -28,6 +28,11 @@ pub struct Ownership {
     pub sequences: Vec<String>,
 }
 
+impl Default for Ownership {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl Ownership {
     pub fn new() -> Self {
         Ownership {
@@ -46,6 +51,12 @@ pub struct Privileges {
     pub tables: TablePrivileges,
     #[serde(skip_serializing_if = "SequencePrivileges::is_empty")]
     pub sequences: SequencePrivileges,
+}
+
+impl Default for Privileges {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Privileges {

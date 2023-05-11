@@ -1,6 +1,7 @@
-pub mod context;
-pub(crate) mod diff;
+mod attributes;
+mod context;
+mod diff;
 pub mod generate;
-pub mod grants;
-pub(crate) mod queries;
+mod grants;
+mod queries;
 pub mod spec;
