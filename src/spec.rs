@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+pub type RoleSpec = HashMap<String, Role>;
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DatabasePermission {
     pub version: u32,

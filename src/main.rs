@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use permirust::generate::generate_spec;
-use postgres::{Client, NoTls};
 
 #[derive(Parser)]
 #[command(
@@ -53,14 +52,8 @@ fn main() {
             }
         }
         Some(Commands::Generate {}) => {
-            let mut client = Client::connect(
-                "host=localhost port=54321 user=postgres password=password",
-                NoTls,
-            )
-            .unwrap();
-            // TODO: Quit more gracefully when client fails
             println!("Generating...");
-            let _ = generate_spec(&mut client);
+            let _ = generate_spec();
         }
         None => println!("No subcommand was used"),
     }
