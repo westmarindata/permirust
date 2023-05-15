@@ -72,7 +72,7 @@ SELECT
   rolsuper,
   rolvaliduntil
 FROM pg_authid
-WHERE rolname != 'pg_signal_backend'
+WHERE rolname  NOT LIKE 'pg_%';
 ";
 
 pub const Q_GET_DEFAULT_PERMISSIONS: &str = " WITH relkind_mapping (objkey, objkind) AS (
@@ -169,7 +169,9 @@ pub const Q_RAW_OBJECT_ATTRIBUTES: &str = "
     JOIN pg_authid t_owner
         ON co.owner_id = t_owner.OID
     WHERE
-        co.schema NOT LIKE 'pg\\_t%'
+        co.schema NOT LIKE 'pg\\_%' AND
+        co.schema NOT LIKE 'information_schema'
+
     ;
     ";
 

@@ -22,6 +22,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
 
     GRANT SELECT ON finance.Q2_revenue TO analyst;
     GRANT analyst TO jdoe;
+    GRANT postgres to jdoe;
 
     ALTER SCHEMA finance OWNER TO analyst;
     ALTER SCHEMA marketing OWNER TO analyst;
