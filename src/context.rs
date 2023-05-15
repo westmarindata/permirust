@@ -1,14 +1,13 @@
 #![allow(dead_code)]
 use chrono::{DateTime, Utc};
 use core::fmt;
-use postgres::NoTls;
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 enum PrivilegeType {
     Read,
     Write,
 }
-
+#[derive(Hash, Eq, PartialEq, Debug, Clone)]
 enum ObjectKind {
     Table,
     View,
@@ -16,6 +15,22 @@ enum ObjectKind {
     Function,
     Procedure,
     Type,
+}
+
+impl FromStr for ObjectKind {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "table" => Ok(ObjectKind::Table),
+            "view" => Ok(ObjectKind::View),
+            "sequence" => Ok(ObjectKind::Sequence),
+            "function" => Ok(ObjectKind::Function),
+            "procedure" => Ok(ObjectKind::Procedure),
+            "type" => Ok(ObjectKind::Type),
+            _ => Err(()),
+        }
+    }
 }
 
 struct ObjectPermissions {
@@ -30,76 +45,53 @@ pub struct RolePermissions {
 }
 
 impl RolePermissions {
-    pub fn new(role: String) -> Self {
-        RolePermissions {
-            role,
-            permissions: HashMap::new(),
+    pub fn add_read_permission(&self, grantee: GranteePrivileges) {
+        if self.permissions.contains_key(&grantee.objkind) {
+            let mut obj = self.permissions.get_mut(&grantee.objkind).unwrap();
+            obj.read.push(grantee.grantee);
+        } else {
+            let mut obj = ObjectPermissions {
+                objkind: grantee.objkind,
+                read: vec![grantee.grantee],
+                write: vec![],
+            };
+            self.permissions.insert(grantee.objkind, obj);
         }
     }
-    pub fn add_read_permission(&self, grantee: GranteePrivileges) {}
 
-    pub fn add_write_permission(&self, grantee: GranteePrivileges) -> Self {}
-}
-
-#[derive(Clone)]
-pub struct PostgresRoleAttributes {
-    pub name: String,
-    bypassrls: bool,
-    pub canlogin: bool,
-    connlimit: i32,
-    createdb: bool,
-    createrole: bool,
-    inherit: bool,
-    replication: bool,
-    pub superuser: bool,
-    validuntil: Option<DateTime<Utc>>,
-}
-
-impl fmt::Debug for PostgresRoleAttributes {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "<{}> enabled: {} superuser: {}",
-            self.name, self.canlogin, self.superuser
-        )
-    }
-}
-
-impl PostgresRoleAttributes {
-    pub(crate) fn new(name: String) -> Self {
-        PostgresRoleAttributes {
-            name,
-            bypassrls: false,
-            canlogin: false,
-            connlimit: 0,
-            createdb: false,
-            createrole: false,
-            inherit: false,
-            replication: false,
-            superuser: false,
-            validuntil: None,
+    pub fn add_write_permission(&self, grantee: GranteePrivileges) {
+        if self.permissions.contains_key(&grantee.objkind) {
+            let mut obj = self.permissions.get_mut(&grantee.objkind).unwrap();
+            obj.write.push(grantee.grantee);
+        } else {
+            let mut obj = ObjectPermissions {
+                objkind: grantee.objkind,
+                read: vec![],
+                write: vec![grantee.grantee],
+            };
+            self.permissions.insert(grantee.objkind, obj);
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct PostgresMembership {
+pub struct RoleMembership {
     pub role: String,
     pub member_of: String,
 }
 
-impl PostgresMembership {
+impl RoleMembership {
     pub fn new(role: String, member_of: String) -> Self {
-        PostgresMembership { role, member_of }
+        RoleMembership { role, member_of }
     }
 }
 
-impl fmt::Display for PostgresMembership {
+impl fmt::Display for RoleMembership {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "<Membership> {}->{}", self.role, self.member_of)
     }
 }
-pub struct PostgresOwnership {
+pub struct ObjectOwnership {
     pub owner: String,
     pub objkind: String,
     pub schema: String,
@@ -108,7 +100,7 @@ pub struct PostgresOwnership {
 #[derive(Debug)]
 pub struct GranteePrivileges {
     grantee: String,
-    objkind: String,
+    objkind: ObjectKind,
     schema: String,
     unqualified_name: Option<String>,
     privilege_type: String,
@@ -118,7 +110,7 @@ impl fmt::Display for GranteePrivileges {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "<GranteePrivileges> {} has {} ON {} {}.{}",
+            "<GranteePrivileges> {} has {} ON {:?} {}.{}",
             self.grantee,
             self.privilege_type,
             self.objkind,
@@ -156,11 +148,11 @@ pub struct RawObjectAttribute {
 
 pub trait Context {
     fn get_role_attributes(&mut self) -> Vec<PostgresRoleAttributes>;
-    fn get_all_memberships(&mut self) -> Vec<PostgresMembership>;
+    fn get_all_memberships(&mut self) -> Vec<RoleMembership>;
     fn get_obj_permissions_by_role(&mut self) -> Vec<GranteePrivileges>;
     fn get_default_permissions(&mut self) -> Vec<DefaultAccessPrivileges>;
     fn get_raw_object_attributes(&mut self) -> Vec<RawObjectAttribute>;
-    fn get_ownerships(&mut self) -> Vec<PostgresOwnership>;
+    fn get_ownerships(&mut self) -> Vec<ObjectOwnership>;
     fn get_privileges(&mut self, role: &str);
 }
 
@@ -201,7 +193,7 @@ impl PostgresContext {
 
     // HashMap<ObjectKind, ObjectPermissions>
 
-    fn get_all_current_nondefaults(&mut self) -> RolePermissions {
+    fn get_all_current_nondefaults(&mut self) -> HashMap<String, RolePermissions> {
         let rows = &self
             .client
             .query(crate::queries::Q_GET_ALL_CURRENT_NONDEFAULTS, &[])
@@ -211,21 +203,17 @@ impl PostgresContext {
             .iter()
             .map(|row| GranteePrivileges {
                 grantee: row.get(0),
-                objkind: row.get(1),
+                objkind: ObjectKind::from_str(row.get(1)).unwrap(),
                 schema: row.get(2),
                 unqualified_name: row.get(3),
                 privilege_type: row.get(4),
             })
             .collect();
 
-        let perms = RolePermissions::new();
+        let mut perms: HashMap<String, HashMap<ObjectKind, ObjectPermissions>> = HashMap::new();
 
         for grantee in grantees {
-            if grantee.privilege_type == "SELECT" {
-                perms.add_read_permission(grantee);
-            } else {
-                perms.add_write_permission(grantee);
-            }
+            perms.insert(grantee.grantee.clone(), HashMap::new());
         }
 
         perms
@@ -255,14 +243,14 @@ impl Context for PostgresContext {
             .collect()
     }
 
-    fn get_all_memberships(&mut self) -> Vec<PostgresMembership> {
+    fn get_all_memberships(&mut self) -> Vec<RoleMembership> {
         let rows = &self
             .client
             .query(crate::queries::Q_ALL_MEMBERSHIPS, &[])
             .unwrap();
 
         rows.iter()
-            .map(|row| PostgresMembership {
+            .map(|row| RoleMembership {
                 role: row.get(0),
                 member_of: row.get(1),
             })
@@ -286,12 +274,12 @@ impl Context for PostgresContext {
             .collect()
     }
 
-    fn get_ownerships(&mut self) -> Vec<PostgresOwnership> {
+    fn get_ownerships(&mut self) -> Vec<ObjectOwnership> {
         let raw_attrs = self.get_raw_object_attributes();
 
         raw_attrs
             .iter()
-            .map(|attr| PostgresOwnership {
+            .map(|attr| ObjectOwnership {
                 owner: attr.owner.clone(),
                 objkind: attr.kind.clone(),
                 schema: attr.schema.clone(),
@@ -309,7 +297,7 @@ impl Context for PostgresContext {
         rows.iter()
             .map(|row| GranteePrivileges {
                 grantee: row.get(0),
-                objkind: row.get(1),
+                objkind: ObjectKind::from_str(row.get(1)).unwrap(),
                 schema: row.get(2),
                 unqualified_name: row.get(3),
                 privilege_type: row.get(4),
