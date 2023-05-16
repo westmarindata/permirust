@@ -41,3 +41,18 @@ impl PostgresRoleAttributes {
         }
     }
 }
+
+pub struct PostgresContext {
+    client: postgres::Client,
+}
+
+impl PostgresContext {
+    pub fn new() -> Self {
+        let client = postgres::Client::connect(
+            "host=localhost port=54321 user=postgres password=password",
+            NoTls,
+        )
+        .unwrap();
+        PostgresContext { client }
+    }
+}

@@ -10,6 +10,12 @@ pub struct DatabasePermission {
     pub roles: HashMap<String, Role>,
 }
 
+impl DatabasePermission {
+    pub fn insert_roles(&mut self, name: String, role: Role) {
+        self.roles.insert(name, role);
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Role {
     pub can_login: bool,

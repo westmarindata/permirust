@@ -30,7 +30,7 @@ enum Commands {
 }
 
 fn main() {
-    env_logger::init();
+    env_logger::builder().format_timestamp(None).init();
     let cli = Cli::parse();
 
     if let Some(spec) = cli.spec.as_deref() {
@@ -53,7 +53,8 @@ fn main() {
         }
         Some(Commands::Generate {}) => {
             println!("Generating...");
-            let _ = generate_spec();
+            let res = generate_spec();
+            assert!(res.is_ok());
         }
         None => println!("No subcommand was used"),
     }

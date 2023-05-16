@@ -1,7 +1,7 @@
 PHONY: pg
 
 generate:
-	cargo run -- generate
+	RUST_LOG=INFO cargo -q run -- generate
 
 pg-start:
 	@echo "Building Postgres"
