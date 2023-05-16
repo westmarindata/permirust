@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::context::{RoleAttribute, RoleMembership};
+use crate::context::{DatabaseObject, ObjectKind, Privilege, RoleAttribute, RoleMembership};
 
 pub type RoleSpec = HashMap<String, Role>;
 
@@ -28,8 +28,17 @@ impl DatabaseSpec {
 
     pub fn add_role(&mut self, name: &str, role: &RoleAttribute) {
         let role = Role {
-            can_login: role.can_login,
-            is_superuser: role.is_superuser,
+            can_login: role.obj.attrs.can_login,
+            is_superuser: role.obj.attrs.is_superuser,
+            member_of: vec![],
+            owns: Ownership::new(),
+            privileges: Privileges::new(),
+        };
+        self.roles.insert(name.to_string(), role);
+
+        let role = Role {
+            can_login: role.obj.attrs.can_login,
+            is_superuser: role.obj.attrs.is_superuser,
             member_of: vec![],
             owns: Ownership::new(),
             privileges: Privileges::new(),
@@ -41,6 +50,38 @@ impl DatabaseSpec {
         let role = self.roles.get_mut(name).unwrap();
         memberships.memberships.iter().for_each(|m| {
             role.member_of.push(m.to_string());
+        });
+    }
+
+    pub fn add_ownerships(&mut self, name: &str, ownership: &[DatabaseObject]) {
+        let role = self.roles.get_mut(name).unwrap();
+        ownership.iter().for_each(|o| match o.kind {
+            ObjectKind::Schema => {
+                role.owns.schemas.push(o.fqn());
+            }
+            ObjectKind::Table => {
+                role.owns.tables.push(o.fqn());
+            }
+            ObjectKind::Sequence => {
+                role.owns.sequences.push(o.fqn());
+            }
+            _ => panic!("Unknown object kind: {}", o.kind),
+        });
+    }
+
+    pub fn add_privileges(&mut self, name: &str, privileges: &[Privilege]) {
+        let role = self.roles.get_mut(name).unwrap();
+        privileges.iter().for_each(|p| match p.object.kind {
+            ObjectKind::Schema => {
+                role.privileges.schemas.read.push(p.object.fqn());
+            }
+            ObjectKind::Table => {
+                role.privileges.tables.read.push(p.object.fqn());
+            }
+            ObjectKind::Sequence => {
+                role.privileges.sequences.read.push(p.object.fqn());
+            }
+            _ => panic!("Unknown object kind: {}", p.object.kind),
         });
     }
 }

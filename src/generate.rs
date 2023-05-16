@@ -1,30 +1,14 @@
-use crate::context::{Context, DatabaseObject, FakeDb, Privilege, RoleAttribute, RoleMembership};
+use crate::context::{Context, DatabaseObject, Privilege, RoleAttribute, RoleMembership};
 use crate::spec::DatabaseSpec;
 use log::{error, info};
 
 use anyhow::Result;
 
-pub fn generate_spec() -> Result<DatabaseSpec> {
-    let mut spec = DatabaseSpec {
-        version: 1,
-        adapter: "fakedb".to_string(),
-        roles: Default::default(),
-    };
-    let mut context = match spec.adapter.as_str() {
-        "fakedb" => {
-            info!("Generating spec for fakedb.");
-            let db = FakeDb::new();
-            Box::new(db) as Box<dyn Context>
-        }
-        _ => {
-            error!("Unsupported adapter: {}", spec.adapter);
-            panic!();
-        }
-    };
-
+pub fn generate_spec<T>(mut context: impl Context) -> Result<DatabaseSpec> {
+    let mut spec = DatabaseSpec::new();
     let roles = context.get_roles();
     info!("Roles: {:?}", roles);
-    let attrs: Vec<RoleAttribute> = roles
+    let attrs: Vec<RoleAttribute<T>> = roles
         .iter()
         .map(|r| context.get_role_attributes(r))
         .collect();
@@ -42,10 +26,10 @@ pub fn generate_spec() -> Result<DatabaseSpec> {
         .collect();
 
     for (i, role) in roles.iter().enumerate() {
-        // Create member, owns, and privileges from the above for each role
-        //
         spec.add_role(&role.0, &attrs[i]);
         spec.add_memberships(&role.0, &memberships[i]);
+        spec.add_ownerships(&role.0, &owners[i]);
+        spec.add_privileges(&role.0, &privs[i]);
     }
 
     match spec.to_yaml() {

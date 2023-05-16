@@ -1,4 +1,4 @@
-#[allow(dead_code)]
+#![allow(dead_code)]
 pub fn diff_grant<T: PartialEq + Clone>(
     new_grants: Vec<T>,
     old_grants: Vec<T>,
@@ -68,7 +68,7 @@ mod tests {
 
         let new_grants = vec![select.clone(), insert.clone(), update.clone()];
 
-        let old_grants = vec![insert.clone(), delete.clone()];
+        let old_grants = vec![insert, delete.clone()];
 
         let grants_to_add = vec![select, update];
 
@@ -90,7 +90,7 @@ mod tests {
         )
         .unwrap();
 
-        let new_grant = vec![select.clone()];
+        let new_grant = vec![select];
 
         let res_add = diff_grant(new_grant.clone(), vec![]);
         assert_eq!(new_grant, res_add.0);

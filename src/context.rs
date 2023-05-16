@@ -1,27 +1,30 @@
 #![allow(dead_code)]
-use std::fmt::{self, Debug};
-
-use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    fmt::{self, Debug},
+};
 
 pub trait Context {
+    type Database: Database;
     fn get_roles(&mut self) -> Vec<Role>;
-    fn get_role_attributes(&mut self, role: &Role) -> RoleAttribute;
+    fn get_role_attributes(&mut self, role: &Role) -> dyn RoleAttributes;
     fn get_role_memberships(&mut self, role: &Role) -> RoleMembership;
     fn get_role_ownerships(&mut self, role: &Role) -> Vec<DatabaseObject>;
     fn get_role_permissions(&mut self, role: &Role) -> Vec<Privilege>;
 }
 
+trait Database {
+    type RoleAttributes;
+}
+
+trait RoleAttributes {
+    fn attrs(&self) -> HashMap<String, String>;
+}
+
 #[derive(Debug, Clone)]
 pub struct Role(pub String);
 
-// TODO: Make this generic
 #[derive(Debug)]
-pub struct RoleAttribute {
-    pub can_login: bool,
-    pub is_superuser: bool,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RoleMembership {
     pub memberships: Vec<String>,
 }
@@ -32,7 +35,7 @@ impl RoleMembership {
     }
 }
 
-enum ObjectKind {
+pub enum ObjectKind {
     Schema,
     Table,
     View,
@@ -63,7 +66,7 @@ impl fmt::Display for ObjectKind {
 }
 
 pub struct DatabaseObject {
-    kind: ObjectKind,
+    pub kind: ObjectKind,
     schema: String,
     unqualified_name: Option<String>,
 }
@@ -85,7 +88,7 @@ impl DatabaseObject {
         }
     }
 
-    fn _fqn(&self) -> String {
+    pub fn fqn(&self) -> String {
         match &self.unqualified_name {
             Some(name) => format!("{}.{}", self.schema, name),
             None => self.schema.clone(),
@@ -94,116 +97,150 @@ impl DatabaseObject {
 }
 
 #[derive(Debug)]
-enum PrivilegeType {
+pub enum PrivilegeType {
     Read,
     Write,
 }
 
 #[derive(Debug)]
 pub struct Privilege {
-    object: DatabaseObject,
-    privs: Vec<PrivilegeType>,
+    pub object: DatabaseObject,
+    pub privs: Vec<PrivilegeType>,
 }
 
-pub struct FakeDb;
+mod fake_db {
+    use super::*;
 
-impl FakeDb {
-    pub fn new() -> Self {
-        FakeDb
-    }
-}
-
-impl Context for FakeDb {
-    fn get_roles(&mut self) -> Vec<Role> {
-        vec![
-            Role("alice".to_string()),
-            Role("bob".to_string()),
-            Role("carol".to_string()),
-        ]
+    struct FakeDbAttribute {}
+    struct FakeDb {}
+    impl Database for FakeDb {
+        type RoleAttributes = FakeDbAttribute;
     }
 
-    fn get_role_attributes(&mut self, _role: &Role) -> RoleAttribute {
-        RoleAttribute {
-            can_login: true,
-            is_superuser: false,
+    impl RoleAttributes for FakeDbAttribute {
+        fn attrs(&self) -> HashMap<String, String> {
+            let mut attrs = HashMap::new();
+            attrs.insert("can_login".to_string(), "true".to_string());
+            attrs.insert("is_superuser".to_string(), "false".to_string());
+            attrs
         }
     }
 
-    fn get_role_memberships(&mut self, _role: &Role) -> RoleMembership {
-        RoleMembership::new(vec!["analyst".to_string(), "developer".to_string()])
-    }
+    impl Context for FakeDb {
+        type Database = FakeDb;
+        fn get_roles(&mut self) -> Vec<Role> {
+            vec![
+                Role("alice".to_string()),
+                Role("bob".to_string()),
+                Role("carol".to_string()),
+            ]
+        }
 
-    fn get_role_ownerships(&mut self, _role: &Role) -> Vec<DatabaseObject> {
-        vec![
-            DatabaseObject::new(ObjectKind::Schema, "marketing".to_string(), None),
-            DatabaseObject::new(ObjectKind::Schema, "finance".to_string(), None),
-            DatabaseObject::new(
-                ObjectKind::Table,
-                "finance".to_string(),
-                Some("q2_results".to_string()),
-            ),
-        ]
-    }
+        fn get_role_attributes(&mut self, _role: &Role) -> dyn RoleAttributes {
+            let attrs = FakeDbAttribute {};
+            attrs.attrs()
+        }
 
-    fn get_role_permissions(&mut self, role: &Role) -> Vec<Privilege> {
-        use PrivilegeType::*;
-        match role.0.as_str() {
-            "alice" => vec![
-                Privilege {
-                    object: DatabaseObject::new(ObjectKind::Schema, "marketing".to_string(), None),
-                    privs: vec![Read],
-                },
-                Privilege {
-                    object: DatabaseObject::new(ObjectKind::Schema, "finance".to_string(), None),
-                    privs: vec![Read, Write],
-                },
-                Privilege {
-                    object: DatabaseObject::new(
-                        ObjectKind::Table,
-                        "finance".to_string(),
-                        Some("q2_results".to_string()),
-                    ),
-                    privs: vec![Read],
-                },
-            ],
+        fn get_role_memberships(&mut self, _role: &Role) -> RoleMembership {
+            RoleMembership::new(vec!["analyst".to_string(), "developer".to_string()])
+        }
 
-            "bob" => vec![
-                Privilege {
-                    object: DatabaseObject::new(ObjectKind::Schema, "marketing".to_string(), None),
-                    privs: vec![Read],
-                },
-                Privilege {
-                    object: DatabaseObject::new(ObjectKind::Schema, "finance".to_string(), None),
-                    privs: vec![Read],
-                },
-                Privilege {
-                    object: DatabaseObject::new(
-                        ObjectKind::Table,
-                        "finance".to_string(),
-                        Some("q2_results".to_string()),
-                    ),
-                    privs: vec![Read, Write],
-                },
-            ],
-            "carol" => vec![
-                Privilege {
-                    object: DatabaseObject::new(ObjectKind::Schema, "marketing".to_string(), None),
-                    privs: vec![Read],
-                },
-                Privilege {
-                    object: DatabaseObject::new(ObjectKind::Schema, "finance".to_string(), None),
-                    privs: vec![Read],
-                },
-                Privilege {
-                    object: DatabaseObject::new(
-                        ObjectKind::Table,
-                        "finance".to_string(),
-                        Some("q2_results".to_string()),
-                    ),
-                    privs: vec![Read],
-                },
-            ],
-            _ => vec![],
+        fn get_role_ownerships(&mut self, _role: &Role) -> Vec<DatabaseObject> {
+            vec![
+                DatabaseObject::new(ObjectKind::Schema, "marketing".to_string(), None),
+                DatabaseObject::new(ObjectKind::Schema, "finance".to_string(), None),
+                DatabaseObject::new(
+                    ObjectKind::Table,
+                    "finance".to_string(),
+                    Some("q2_results".to_string()),
+                ),
+            ]
+        }
+
+        fn get_role_permissions(&mut self, role: &Role) -> Vec<Privilege> {
+            use PrivilegeType::*;
+            match role.0.as_str() {
+                "alice" => vec![
+                    Privilege {
+                        object: DatabaseObject::new(
+                            ObjectKind::Schema,
+                            "marketing".to_string(),
+                            None,
+                        ),
+                        privs: vec![Read],
+                    },
+                    Privilege {
+                        object: DatabaseObject::new(
+                            ObjectKind::Schema,
+                            "finance".to_string(),
+                            None,
+                        ),
+                        privs: vec![Read, Write],
+                    },
+                    Privilege {
+                        object: DatabaseObject::new(
+                            ObjectKind::Table,
+                            "finance".to_string(),
+                            Some("q2_results".to_string()),
+                        ),
+                        privs: vec![Read],
+                    },
+                ],
+
+                "bob" => vec![
+                    Privilege {
+                        object: DatabaseObject::new(
+                            ObjectKind::Schema,
+                            "marketing".to_string(),
+                            None,
+                        ),
+                        privs: vec![Read],
+                    },
+                    Privilege {
+                        object: DatabaseObject::new(
+                            ObjectKind::Schema,
+                            "finance".to_string(),
+                            None,
+                        ),
+                        privs: vec![Read],
+                    },
+                    Privilege {
+                        object: DatabaseObject::new(
+                            ObjectKind::Table,
+                            "finance".to_string(),
+                            Some("q2_results".to_string()),
+                        ),
+                        privs: vec![Read, Write],
+                    },
+                ],
+                "carol" => vec![
+                    Privilege {
+                        object: DatabaseObject::new(
+                            ObjectKind::Schema,
+                            "marketing".to_string(),
+                            None,
+                        ),
+                        privs: vec![Read],
+                    },
+                    Privilege {
+                        object: DatabaseObject::new(
+                            ObjectKind::Schema,
+                            "finance".to_string(),
+                            None,
+                        ),
+                        privs: vec![Read],
+                    },
+                    Privilege {
+                        object: DatabaseObject::new(
+                            ObjectKind::Table,
+                            "finance".to_string(),
+                            Some("q2_results".to_string()),
+                        ),
+                        privs: vec![Read],
+                    },
+                ],
+                _ => vec![],
+            }
         }
     }
 }

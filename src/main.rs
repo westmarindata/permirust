@@ -53,7 +53,7 @@ fn main() {
         }
         Some(Commands::Generate {}) => {
             println!("Generating...");
-            let res = generate_spec();
+            let res = generate_spec(FakeDbClient::new());
             assert!(res.is_ok());
         }
         None => println!("No subcommand was used"),
