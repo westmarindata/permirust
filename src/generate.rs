@@ -1,23 +1,23 @@
 use crate::context::{Context, DatabaseObject, FakeDb, Privilege, RoleAttribute, RoleMembership};
-use crate::spec::{DatabasePermission, Ownership, Privileges};
+use crate::spec::DatabaseSpec;
 use log::{error, info};
 
 use anyhow::Result;
 
-pub fn generate_spec() -> Result<DatabasePermission> {
-    let mut db_spec = DatabasePermission {
+pub fn generate_spec() -> Result<DatabaseSpec> {
+    let mut spec = DatabaseSpec {
         version: 1,
         adapter: "fakedb".to_string(),
         roles: Default::default(),
     };
-    let mut context = match db_spec.adapter.as_str() {
+    let mut context = match spec.adapter.as_str() {
         "fakedb" => {
             info!("Generating spec for fakedb.");
             let db = FakeDb::new();
             Box::new(db) as Box<dyn Context>
         }
         _ => {
-            error!("Unsupported adapter: {}", db_spec.adapter);
+            error!("Unsupported adapter: {}", spec.adapter);
             panic!();
         }
     };
@@ -42,24 +42,18 @@ pub fn generate_spec() -> Result<DatabasePermission> {
         .collect();
 
     for (i, role) in roles.iter().enumerate() {
-        // TODO: Offload these to a separate function.
         // Create member, owns, and privileges from the above for each role
-        let spec = crate::spec::Role {
-            can_login: attrs[i].can_login,
-            is_superuser: attrs[i].is_superuser,
-            member_of: vec![],
-            owns: Ownership::new(),
-            privileges: Privileges::new(),
-        };
-        db_spec.insert_roles(role.0.clone(), spec);
+        //
+        spec.add_role(&role.0, &attrs[i]);
+        spec.add_memberships(&role.0, &memberships[i]);
     }
 
-    match db_spec.to_yaml() {
+    match spec.to_yaml() {
         Ok(yaml) => println!("{}", yaml),
         Err(e) => {
             error!("Error serializing spec: {}", e);
         }
     };
 
-    Ok(db_spec)
+    Ok(spec)
 }

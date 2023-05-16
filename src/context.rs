@@ -1,8 +1,7 @@
 #![allow(dead_code)]
-use std::{
-    collections::HashMap,
-    fmt::{self, Debug},
-};
+use std::fmt::{self, Debug};
+
+use serde::{Deserialize, Serialize};
 
 pub trait Context {
     fn get_roles(&mut self) -> Vec<Role>;
@@ -22,8 +21,16 @@ pub struct RoleAttribute {
     pub is_superuser: bool,
 }
 
-#[derive(Debug)]
-pub struct RoleMembership(Vec<String>);
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct RoleMembership {
+    pub memberships: Vec<String>,
+}
+
+impl RoleMembership {
+    pub fn new(memberships: Vec<String>) -> Self {
+        RoleMembership { memberships }
+    }
+}
 
 enum ObjectKind {
     Schema,
@@ -123,7 +130,7 @@ impl Context for FakeDb {
     }
 
     fn get_role_memberships(&mut self, _role: &Role) -> RoleMembership {
-        RoleMembership(vec!["analyst".to_string(), "developer".to_string()])
+        RoleMembership::new(vec!["analyst".to_string(), "developer".to_string()])
     }
 
     fn get_role_ownerships(&mut self, _role: &Role) -> Vec<DatabaseObject> {

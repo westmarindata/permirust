@@ -1,18 +1,47 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::context::{RoleAttribute, RoleMembership};
+
 pub type RoleSpec = HashMap<String, Role>;
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct DatabasePermission {
-    pub version: u32,
+pub struct DatabaseSpec {
+    pub version: u8,
     pub adapter: String,
-    pub roles: HashMap<String, Role>,
+    pub roles: RoleSpec,
 }
 
-impl DatabasePermission {
-    pub fn insert_roles(&mut self, name: String, role: Role) {
-        self.roles.insert(name, role);
+impl Default for DatabaseSpec {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl DatabaseSpec {
+    pub fn new() -> DatabaseSpec {
+        DatabaseSpec {
+            version: 1,
+            adapter: "fakedb".to_string(),
+            roles: Default::default(),
+        }
+    }
+
+    pub fn add_role(&mut self, name: &str, role: &RoleAttribute) {
+        let role = Role {
+            can_login: role.can_login,
+            is_superuser: role.is_superuser,
+            member_of: vec![],
+            owns: Ownership::new(),
+            privileges: Privileges::new(),
+        };
+        self.roles.insert(name.to_string(), role);
+    }
+
+    pub fn add_memberships(&mut self, name: &str, memberships: &RoleMembership) {
+        let role = self.roles.get_mut(name).unwrap();
+        memberships.memberships.iter().for_each(|m| {
+            role.member_of.push(m.to_string());
+        });
     }
 }
 
@@ -136,7 +165,7 @@ impl IsEmpty for SequencePrivileges {
         self.read.is_empty() && self.write.is_empty()
     }
 }
-impl DatabasePermission {
+impl DatabaseSpec {
     pub fn to_yaml(&self) -> Result<String, serde_yaml::Error> {
         serde_yaml::to_string(&self)
     }
