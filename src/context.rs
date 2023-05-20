@@ -1,24 +1,18 @@
 #![allow(dead_code)]
-use std::{
-    collections::HashMap,
-    fmt::{self, Debug},
-};
+use std::fmt::{self, Debug};
 
 pub trait Context {
-    type Database: Database;
+    type RoleAttribute;
     fn get_roles(&mut self) -> Vec<Role>;
-    fn get_role_attributes(&mut self, role: &Role) -> dyn RoleAttributes;
+    fn get_role_attributes(&mut self, role: &Role) -> Self::RoleAttribute;
     fn get_role_memberships(&mut self, role: &Role) -> RoleMembership;
     fn get_role_ownerships(&mut self, role: &Role) -> Vec<DatabaseObject>;
     fn get_role_permissions(&mut self, role: &Role) -> Vec<Privilege>;
 }
 
-trait Database {
-    type RoleAttributes;
-}
-
-trait RoleAttributes {
-    fn attrs(&self) -> HashMap<String, String>;
+pub trait RoleAttribute {
+    fn is_enabled(&self) -> bool;
+    fn is_superuser(&self) -> bool;
 }
 
 #[derive(Debug, Clone)]
@@ -108,26 +102,16 @@ pub struct Privilege {
     pub privs: Vec<PrivilegeType>,
 }
 
-mod fake_db {
+pub mod fake_db {
     use super::*;
-
-    struct FakeDbAttribute {}
-    struct FakeDb {}
-    impl Database for FakeDb {
-        type RoleAttributes = FakeDbAttribute;
-    }
-
-    impl RoleAttributes for FakeDbAttribute {
-        fn attrs(&self) -> HashMap<String, String> {
-            let mut attrs = HashMap::new();
-            attrs.insert("can_login".to_string(), "true".to_string());
-            attrs.insert("is_superuser".to_string(), "false".to_string());
-            attrs
-        }
+    pub struct FakeDb {}
+    pub struct FakeDbAttribute {
+        enabled: bool,
+        superuser: bool,
     }
 
     impl Context for FakeDb {
-        type Database = FakeDb;
+        type RoleAttribute = FakeDbAttribute;
         fn get_roles(&mut self) -> Vec<Role> {
             vec![
                 Role("alice".to_string()),
@@ -136,9 +120,11 @@ mod fake_db {
             ]
         }
 
-        fn get_role_attributes(&mut self, _role: &Role) -> dyn RoleAttributes {
-            let attrs = FakeDbAttribute {};
-            attrs.attrs()
+        fn get_role_attributes(&mut self, _role: &Role) -> Self::RoleAttribute {
+            FakeDbAttribute {
+                enabled: true,
+                superuser: false,
+            }
         }
 
         fn get_role_memberships(&mut self, _role: &Role) -> RoleMembership {
@@ -241,6 +227,16 @@ mod fake_db {
                 ],
                 _ => vec![],
             }
+        }
+    }
+
+    impl RoleAttribute for FakeDbAttribute {
+        fn is_enabled(&self) -> bool {
+            self.enabled
+        }
+
+        fn is_superuser(&self) -> bool {
+            self.superuser
         }
     }
 }

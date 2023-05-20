@@ -1,4 +1,4 @@
-use crate::context::{Context, RoleAttribute};
+use crate::context::Context;
 use postgres::NoTls;
 
 pub struct PostgresClient {
@@ -16,29 +16,18 @@ impl PostgresClient {
     }
 }
 
-pub struct PostgresContext {
-    pub attrs: PostgresRoleAttributes,
-}
-
-enum PostgresRoleAttributes {
-    CanLogin(bool),
-    ConnLimit(usize),
-    CreateDb(bool),
-    CreateRole(bool),
-    Inherit(bool),
-    Replication(bool),
-    Superuser(bool),
+pub struct PostgresRoleAttributes {
+    pub can_login: bool,
+    pub is_superuser: bool,
 }
 
 impl Context for PostgresClient {
+    type RoleAttribute = PostgresRoleAttributes;
     fn get_roles(&mut self) -> Vec<crate::context::Role> {
         panic!();
     }
 
-    fn get_role_attributes(
-        &mut self,
-        role: &crate::context::Role,
-    ) -> RoleAttribute<PostgresContext> {
+    fn get_role_attributes(&mut self, role: &crate::context::Role) -> PostgresRoleAttributes {
         panic!();
     }
 

@@ -4,11 +4,14 @@ use log::{error, info};
 
 use anyhow::Result;
 
-pub fn generate_spec<T>(mut context: impl Context) -> Result<DatabaseSpec> {
+pub fn generate_spec<T: Context>(mut context: T) -> Result<DatabaseSpec>
+where
+    <T as crate::context::Context>::RoleAttribute: RoleAttribute,
+{
     let mut spec = DatabaseSpec::new();
     let roles = context.get_roles();
     info!("Roles: {:?}", roles);
-    let attrs: Vec<RoleAttribute<T>> = roles
+    let attrs: Vec<T::RoleAttribute> = roles
         .iter()
         .map(|r| context.get_role_attributes(r))
         .collect();

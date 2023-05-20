@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use permirust::context::fake_db::FakeDb;
 use permirust::generate::generate_spec;
 
 #[derive(Parser)]
@@ -53,7 +54,7 @@ fn main() {
         }
         Some(Commands::Generate {}) => {
             println!("Generating...");
-            let res = generate_spec(FakeDbClient::new());
+            let res = generate_spec(FakeDb {});
             assert!(res.is_ok());
         }
         None => println!("No subcommand was used"),

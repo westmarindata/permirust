@@ -26,19 +26,10 @@ impl DatabaseSpec {
         }
     }
 
-    pub fn add_role(&mut self, name: &str, role: &RoleAttribute) {
+    pub fn add_role(&mut self, name: &str, role: &impl RoleAttribute) {
         let role = Role {
-            can_login: role.obj.attrs.can_login,
-            is_superuser: role.obj.attrs.is_superuser,
-            member_of: vec![],
-            owns: Ownership::new(),
-            privileges: Privileges::new(),
-        };
-        self.roles.insert(name.to_string(), role);
-
-        let role = Role {
-            can_login: role.obj.attrs.can_login,
-            is_superuser: role.obj.attrs.is_superuser,
+            can_login: role.is_enabled(),
+            is_superuser: role.is_superuser(),
             member_of: vec![],
             owns: Ownership::new(),
             privileges: Privileges::new(),
