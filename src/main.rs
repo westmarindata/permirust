@@ -18,6 +18,8 @@ struct Cli {
     #[arg(short, long, action = clap::ArgAction::Count)]
     debug: u8,
 
+    adapter: String,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -34,7 +36,6 @@ enum Commands {
 fn main() {
     env_logger::builder().format_timestamp(None).init();
     let cli = Cli::parse();
-    let db = PostgresClient::new();
 
     if let Some(spec) = cli.spec.as_deref() {
         println!("Using config file: {}", spec.display());
@@ -56,15 +57,30 @@ fn main() {
         }
         Some(Commands::Generate {}) => {
             println!("Generating...");
-            let res = generate_spec(db);
-            assert!(res.is_ok());
         }
 
         None => {
             println!("No subcommand was used");
             println!("Generating...");
-            let res = generate_spec(db);
-            assert!(res.is_ok());
+            if match cli.adapter.as_str() {
+                "postgres" => {
+                    let db = PostgresClient::new();
+                    let res = generate_spec(db);
+                    assert!(res.is_ok());
+                    true
+                }
+                "fake" => {
+                    let db = FakeDb {};
+                    let res = generate_spec(db);
+                    assert!(res.is_ok());
+                    true
+                }
+                _ => false,
+            } {
+                println!("Done!");
+            } else {
+                println!("Unknown adapter: {}", cli.adapter);
+            }
         }
     }
 }

@@ -14,16 +14,11 @@ pub struct DatabaseSpec {
     pub roles: RoleSpec,
 }
 
-impl Default for DatabaseSpec {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 impl DatabaseSpec {
-    pub fn new() -> DatabaseSpec {
+    pub fn new(adapter: &str) -> DatabaseSpec {
         DatabaseSpec {
             version: 1,
-            adapter: "fakedb".to_string(),
+            adapter: adapter.to_string(),
             roles: Default::default(),
         }
     }

@@ -45,6 +45,9 @@ impl RoleAttribute for PostgresRoleAttributes {
 
 impl Context for PostgresClient {
     type RoleAttribute = PostgresRoleAttributes;
+    fn database_name(&self) -> &str {
+        "postgres"
+    }
     fn get_roles(&mut self) -> Vec<String> {
         let rows = &self
             .client

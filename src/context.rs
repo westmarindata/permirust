@@ -3,6 +3,7 @@ use std::fmt::{self, Debug, Display};
 
 pub trait Context {
     type RoleAttribute;
+    fn database_name(&self) -> &str;
     fn get_roles(&mut self) -> Vec<String>;
     fn get_role_attributes(&mut self, role: &str) -> Self::RoleAttribute;
     fn get_role_memberships(&mut self, role: &str) -> RoleMembership;
@@ -133,6 +134,11 @@ pub mod fake_db {
 
     impl Context for FakeDb {
         type RoleAttribute = FakeDbAttribute;
+
+        fn database_name(&self) -> &str {
+            "fake_db"
+        }
+
         fn get_roles(&mut self) -> Vec<String> {
             vec!["alice".to_string(), "bob".to_string(), "carol".to_string()]
         }

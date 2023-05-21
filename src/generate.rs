@@ -8,7 +8,7 @@ pub fn generate_spec<T: Context>(mut context: T) -> Result<DatabaseSpec>
 where
     <T as crate::context::Context>::RoleAttribute: RoleAttribute,
 {
-    let mut spec = DatabaseSpec::new();
+    let mut spec = DatabaseSpec::new(context.database_name());
     let roles = context.get_roles();
 
     info!("Roles: {:?}", roles);
@@ -31,10 +31,10 @@ where
         .collect();
 
     for (i, role) in roles.iter().enumerate() {
-        spec.add_role(&role, &attrs[i]);
-        spec.add_memberships(&role, &memberships[i]);
-        spec.add_ownerships(&role, &owners[i]);
-        spec.add_privileges(&role, &privs[i]);
+        spec.add_role(role, &attrs[i]);
+        spec.add_memberships(role, &memberships[i]);
+        spec.add_ownerships(role, &owners[i]);
+        spec.add_privileges(role, &privs[i]);
     }
 
     match spec.to_yaml() {
