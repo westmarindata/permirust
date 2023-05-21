@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use permirust::context::fake_db::FakeDb;
 use permirust::generate::generate_spec;
+use permirust::postgres::PostgresClient;
 
 #[derive(Parser)]
 #[command(
@@ -33,6 +34,7 @@ enum Commands {
 fn main() {
     env_logger::builder().format_timestamp(None).init();
     let cli = Cli::parse();
+    let db = PostgresClient::new();
 
     if let Some(spec) = cli.spec.as_deref() {
         println!("Using config file: {}", spec.display());
@@ -54,9 +56,15 @@ fn main() {
         }
         Some(Commands::Generate {}) => {
             println!("Generating...");
-            let res = generate_spec(FakeDb {});
+            let res = generate_spec(db);
             assert!(res.is_ok());
         }
-        None => println!("No subcommand was used"),
+
+        None => {
+            println!("No subcommand was used");
+            println!("Generating...");
+            let res = generate_spec(db);
+            assert!(res.is_ok());
+        }
     }
 }

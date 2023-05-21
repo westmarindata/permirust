@@ -10,7 +10,9 @@ where
 {
     let mut spec = DatabaseSpec::new();
     let roles = context.get_roles();
+
     info!("Roles: {:?}", roles);
+
     let attrs: Vec<T::RoleAttribute> = roles
         .iter()
         .map(|r| context.get_role_attributes(r))
@@ -29,10 +31,10 @@ where
         .collect();
 
     for (i, role) in roles.iter().enumerate() {
-        spec.add_role(&role.0, &attrs[i]);
-        spec.add_memberships(&role.0, &memberships[i]);
-        spec.add_ownerships(&role.0, &owners[i]);
-        spec.add_privileges(&role.0, &privs[i]);
+        spec.add_role(&role, &attrs[i]);
+        spec.add_memberships(&role, &memberships[i]);
+        spec.add_ownerships(&role, &owners[i]);
+        spec.add_privileges(&role, &privs[i]);
     }
 
     match spec.to_yaml() {

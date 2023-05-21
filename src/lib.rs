@@ -2,6 +2,6 @@ pub mod context;
 mod diff;
 pub mod generate;
 mod grants;
-mod postgres;
+pub mod postgres;
 mod queries;
 pub mod spec;

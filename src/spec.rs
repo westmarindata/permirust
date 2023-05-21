@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::context::{DatabaseObject, ObjectKind, Privilege, RoleAttribute, RoleMembership};
+use crate::context::{
+    Attributes, DatabaseObject, ObjectKind, Privilege, RoleAttribute, RoleMembership,
+};
 
 pub type RoleSpec = HashMap<String, Role>;
 
@@ -29,7 +31,7 @@ impl DatabaseSpec {
     pub fn add_role(&mut self, name: &str, role: &impl RoleAttribute) {
         let role = Role {
             can_login: role.is_enabled(),
-            is_superuser: role.is_superuser(),
+            is_superuser: role.get_attributes().contains(&Attributes::Superuser),
             member_of: vec![],
             owns: Ownership::new(),
             privileges: Privileges::new(),

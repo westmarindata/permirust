@@ -1,22 +1,43 @@
 #![allow(dead_code)]
-use std::fmt::{self, Debug};
+use std::fmt::{self, Debug, Display};
 
 pub trait Context {
     type RoleAttribute;
-    fn get_roles(&mut self) -> Vec<Role>;
-    fn get_role_attributes(&mut self, role: &Role) -> Self::RoleAttribute;
-    fn get_role_memberships(&mut self, role: &Role) -> RoleMembership;
-    fn get_role_ownerships(&mut self, role: &Role) -> Vec<DatabaseObject>;
-    fn get_role_permissions(&mut self, role: &Role) -> Vec<Privilege>;
+    fn get_roles(&mut self) -> Vec<String>;
+    fn get_role_attributes(&mut self, role: &str) -> Self::RoleAttribute;
+    fn get_role_memberships(&mut self, role: &str) -> RoleMembership;
+    fn get_role_ownerships(&mut self, role: &str) -> Vec<DatabaseObject>;
+    fn get_role_permissions(&mut self, role: &str) -> Vec<Privilege>;
 }
 
 pub trait RoleAttribute {
-    fn is_enabled(&self) -> bool;
-    fn is_superuser(&self) -> bool;
+    fn get_attributes(&self) -> Vec<Attributes>;
+    fn is_enabled(&self) -> bool {
+        self.get_attributes().contains(&Attributes::Enabled)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Attributes {
+    Enabled,
+    Superuser,
+    CreateDb,
+    CreateRole,
+    Inherit,
+    Login,
+    Replication,
+    BypassRls,
+    ConnectionLimit(i32),
 }
 
 #[derive(Debug, Clone)]
 pub struct Role(pub String);
+
+impl Display for Role {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
 
 #[derive(Debug)]
 pub struct RoleMembership {
@@ -39,10 +60,10 @@ pub enum ObjectKind {
 impl From<&str> for ObjectKind {
     fn from(s: &str) -> Self {
         match s {
-            "schema" => ObjectKind::Schema,
-            "table" => ObjectKind::Table,
-            "view" => ObjectKind::View,
-            "sequence" => ObjectKind::Sequence,
+            "schemas" => ObjectKind::Schema,
+            "tables" => ObjectKind::Table,
+            "views" => ObjectKind::View,
+            "sequences" => ObjectKind::Sequence,
             _ => panic!("Unknown object kind: {}", s),
         }
     }
@@ -61,8 +82,8 @@ impl fmt::Display for ObjectKind {
 
 pub struct DatabaseObject {
     pub kind: ObjectKind,
-    schema: String,
-    unqualified_name: Option<String>,
+    pub schema: String,
+    pub unqualified_name: Option<String>,
 }
 
 impl fmt::Debug for DatabaseObject {
@@ -112,26 +133,22 @@ pub mod fake_db {
 
     impl Context for FakeDb {
         type RoleAttribute = FakeDbAttribute;
-        fn get_roles(&mut self) -> Vec<Role> {
-            vec![
-                Role("alice".to_string()),
-                Role("bob".to_string()),
-                Role("carol".to_string()),
-            ]
+        fn get_roles(&mut self) -> Vec<String> {
+            vec!["alice".to_string(), "bob".to_string(), "carol".to_string()]
         }
 
-        fn get_role_attributes(&mut self, _role: &Role) -> Self::RoleAttribute {
+        fn get_role_attributes(&mut self, _role: &str) -> Self::RoleAttribute {
             FakeDbAttribute {
                 enabled: true,
                 superuser: false,
             }
         }
 
-        fn get_role_memberships(&mut self, _role: &Role) -> RoleMembership {
+        fn get_role_memberships(&mut self, _role: &str) -> RoleMembership {
             RoleMembership::new(vec!["analyst".to_string(), "developer".to_string()])
         }
 
-        fn get_role_ownerships(&mut self, _role: &Role) -> Vec<DatabaseObject> {
+        fn get_role_ownerships(&mut self, _role: &str) -> Vec<DatabaseObject> {
             vec![
                 DatabaseObject::new(ObjectKind::Schema, "marketing".to_string(), None),
                 DatabaseObject::new(ObjectKind::Schema, "finance".to_string(), None),
@@ -143,9 +160,9 @@ pub mod fake_db {
             ]
         }
 
-        fn get_role_permissions(&mut self, role: &Role) -> Vec<Privilege> {
+        fn get_role_permissions(&mut self, role: &str) -> Vec<Privilege> {
             use PrivilegeType::*;
-            match role.0.as_str() {
+            match role {
                 "alice" => vec![
                     Privilege {
                         object: DatabaseObject::new(
@@ -231,12 +248,15 @@ pub mod fake_db {
     }
 
     impl RoleAttribute for FakeDbAttribute {
-        fn is_enabled(&self) -> bool {
-            self.enabled
-        }
-
-        fn is_superuser(&self) -> bool {
-            self.superuser
+        fn get_attributes(&self) -> Vec<Attributes> {
+            let mut attrs = vec![];
+            if self.enabled {
+                attrs.push(Attributes::Enabled);
+            }
+            if self.superuser {
+                attrs.push(Attributes::Superuser);
+            }
+            attrs
         }
     }
 }
