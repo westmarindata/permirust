@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 pub const Q_ALL_MEMBERSHIPS: &str = "
 SELECT
   auth_member.rolname AS member,
@@ -57,6 +58,7 @@ WITH
       combined
       JOIN pg_authid t_grantee ON combined.grantee_oid = t_grantee.oid
       WHERE combined.owner != t_grantee.rolname
+ORDER BY 1, 2, 3, 4, 5
 ";
 
 pub const Q_GET_ROLE_ATTRIBUTES: &str = "

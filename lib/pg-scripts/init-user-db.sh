@@ -15,12 +15,28 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     CREATE TABLE finance.Q2_revenue();
     CREATE TABLE finance.Q2_margin();
     CREATE TABLE marketing.ad_spend();
+    CREATE TABLE reports.some_report();
 
     CREATE SEQUENCE reports.Q2_revenue_seq;
 
     ALTER DEFAULT PRIVILEGES IN SCHEMA finance GRANT ALL PRIVILEGES ON TABLES TO analyst;
 
-    GRANT SELECT ON finance.Q2_revenue TO analyst;
+
+    GRANT CREATE ON SCHEMA finance to analyst;
+    GRANT CREATE, USAGE ON SCHEMA marketing to analyst;
+    GRANT USAGE ON SCHEMA reports to analyst;
+
+    GRANT SELECT ON TABLE finance.Q2_revenue TO analyst;
+    GRANT INSERT, UPDATE, DELETE ON TABLE finance.Q2_margin TO analyst;
+    GRANT SELECT, TRUNCATE, INSERT ON TABLE marketing.ad_spend TO analyst;
+
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA reports TO analyst;
+
+    GRANT SELECT ON SEQUENCE reports.Q2_revenue_seq TO analyst;
+    GRANT ALL ON SEQUENCE reports.Q2_revenue_seq TO jdoe;
+
+    GRANT ALL ON ALL TABLES IN SCHEMA reports TO jdoe;
+
     GRANT analyst TO jdoe;
     GRANT postgres to jdoe;
 

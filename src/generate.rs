@@ -46,3 +46,16 @@ where
 
     Ok(spec)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapters::fakedb::FakeDb;
+
+    #[test]
+    fn test_generate() {
+        let context = FakeDb {};
+        let spec = generate_spec(context).unwrap();
+        assert!(spec.roles.len() > 0);
+    }
+}

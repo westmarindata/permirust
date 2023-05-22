@@ -60,14 +60,32 @@ impl DatabaseSpec {
     pub fn add_privileges(&mut self, name: &str, privileges: &[Privilege]) {
         let role = self.roles.get_mut(name).unwrap();
         privileges.iter().for_each(|p| match p.object.kind {
+            // TODO: Abstract this out. Maybe each ObjectKind has a
+            // from_privilege(privilege) method? That way each object
+            // owns its own Read/Write definitions
             ObjectKind::Schema => {
-                role.privileges.schemas.read.push(p.object.fqn());
+                if p.privs.contains(&crate::context::PrivilegeType::Write) {
+                    role.privileges.schemas.write.push(p.object.fqn());
+                }
+                if p.privs.contains(&crate::context::PrivilegeType::Read) {
+                    role.privileges.schemas.read.push(p.object.fqn());
+                }
             }
             ObjectKind::Table => {
-                role.privileges.tables.read.push(p.object.fqn());
+                if p.privs.contains(&crate::context::PrivilegeType::Write) {
+                    role.privileges.tables.write.push(p.object.fqn());
+                }
+                if p.privs.contains(&crate::context::PrivilegeType::Read) {
+                    role.privileges.tables.read.push(p.object.fqn());
+                }
             }
             ObjectKind::Sequence => {
-                role.privileges.sequences.read.push(p.object.fqn());
+                if p.privs.contains(&crate::context::PrivilegeType::Write) {
+                    role.privileges.sequences.write.push(p.object.fqn());
+                }
+                if p.privs.contains(&crate::context::PrivilegeType::Read) {
+                    role.privileges.sequences.read.push(p.object.fqn());
+                }
             }
             _ => panic!("Unknown object kind: {}", p.object.kind),
         });

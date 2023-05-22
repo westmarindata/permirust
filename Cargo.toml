@@ -14,6 +14,7 @@ anyhow = "1.0.68"
 chrono = "0.4.24"
 clap = { version = "4.2.1", features = ["derive"] }
 env_logger = "0.10.0"
+itertools = "0.10.5"
 log = "0.4.17"
 postgres = { version = "0.19.5", features = ["with-chrono-0_4"] }
 serde = { version = "1.0.162", features = ["derive"] }

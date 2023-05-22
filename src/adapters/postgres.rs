@@ -1,24 +1,30 @@
-use crate::context::{Context, RoleAttribute};
+//! Postgres context implementation
+use crate::context::{
+    Context, DatabaseObject, ObjectKind, Privilege, PrivilegeType, RoleAttribute,
+};
+use itertools::Itertools;
+use log::debug;
 use postgres::NoTls;
+use std::collections::HashMap;
 
 pub struct PostgresClient {
     client: postgres::Client,
 }
 
 impl PostgresClient {
-    pub fn new() -> Self {
-        let client = postgres::Client::connect(
-            "host=localhost port=54321 user=postgres password=password",
-            NoTls,
-        )
-        .unwrap();
+    /// Create a new PostgresClient. This uses the Postgres crate
+    /// to connect, the connection string uses the format
+    /// specied by the [Postgres::Config](https://docs.rs/postgres/latest/src/postgres/client.rs.html#34-42)
+    ///
+    /// Example
+    ///
+    /// ```
+    /// use permirust::adapters::postgres::PostgresClient;
+    /// let client = PostgresClient::new("host=localhost user=postgres password=password port=54321");
+    /// ```
+    pub fn new(connection_str: &str) -> Self {
+        let client = postgres::Client::connect(connection_str, NoTls).unwrap();
         PostgresClient { client }
-    }
-}
-
-impl Default for PostgresClient {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -94,15 +100,15 @@ impl Context for PostgresClient {
         }
     }
 
-    fn get_role_ownerships(&mut self, role: &str) -> Vec<crate::context::DatabaseObject> {
+    fn get_role_ownerships(&mut self, role: &str) -> Vec<DatabaseObject> {
         self.client
             .query(crate::queries::Q_RAW_OBJECT_ATTRIBUTES, &[])
             .unwrap()
             .iter()
             .filter_map(|row| {
                 if row.get::<_, String>(3) == role {
-                    let kind = crate::context::ObjectKind::from(row.get::<_, String>(0).as_str());
-                    Some(crate::context::DatabaseObject {
+                    let kind = ObjectKind::from(row.get::<_, String>(0).as_str());
+                    Some(DatabaseObject {
                         kind,
                         schema: row.get(1),
                         unqualified_name: row.get(2),
@@ -114,7 +120,45 @@ impl Context for PostgresClient {
             .collect()
     }
 
-    fn get_role_permissions(&mut self, role: &str) -> Vec<crate::context::Privilege> {
-        vec![]
+    fn get_role_permissions(&mut self, _role: &str) -> Vec<Privilege> {
+        let rows = self
+            .client
+            .query(crate::queries::Q_OBJ_PERMISSIONS_BY_ROLE, &[])
+            .unwrap();
+
+        // Each database object can have 1+ privileges
+        let grouped_rows: HashMap<_, Vec<_>> = rows
+            .iter()
+            .filter(|row| row.get::<_, String>(0) == _role)
+            .group_by(|row| {
+                let kind = ObjectKind::from(row.get::<_, String>(1).as_str());
+                let schema = row.get::<_, String>(2);
+                let unqualified_name = row.get::<_, Option<String>>(3);
+                DatabaseObject {
+                    kind,
+                    schema,
+                    unqualified_name,
+                }
+            })
+            .into_iter()
+            .map(|(key, group)| (key, group.collect()))
+            .collect();
+
+        // For each group, create a privilege
+        let mut permissions = vec![];
+        for (object, grp) in grouped_rows {
+            debug!("Processing object {:?}", object);
+            let privs = grp
+                .into_iter()
+                .map(|row| match row.get::<_, String>(4).as_str() {
+                    "SELECT" => PrivilegeType::Read,
+                    "INSERT" => PrivilegeType::Write,
+                    _ => PrivilegeType::Write,
+                })
+                .collect();
+            debug!("Privs: {:?}", privs);
+            permissions.push(Privilege { object, privs });
+        }
+        permissions
     }
 }

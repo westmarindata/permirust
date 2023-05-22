@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use permirust::context::fake_db::FakeDb;
+use permirust::adapters::fakedb::FakeDb;
+use permirust::adapters::postgres::PostgresClient;
 use permirust::generate::generate_spec;
-use permirust::postgres::PostgresClient;
 
 #[derive(Parser)]
 #[command(
@@ -64,7 +64,8 @@ fn main() {
             println!("Generating...");
             if match cli.adapter.as_str() {
                 "postgres" => {
-                    let db = PostgresClient::new();
+                    let conn_str = "host=localhost port=54321 user=postgres password=password";
+                    let db = PostgresClient::new(&conn_str);
                     let res = generate_spec(db);
                     assert!(res.is_ok());
                     true
