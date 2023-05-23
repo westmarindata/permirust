@@ -120,6 +120,17 @@ impl Context for PostgresClient {
             .collect()
     }
 
+    /// This generates a mapped vector of privileges for a given role.
+    ///
+    ///
+    /// The main query returns a table of granted permissions:
+    /// (grantee, objkind, schema, unqualified_name, privlege_type)
+    ///
+    /// We filter for a given row and then group by the DatabaseObject
+    /// to get a list of privileges for each object.
+    ///
+    /// The raw privilege, e.g. SELECT, INSERT, UPDATE, USAGE is mapped
+    /// to a PrivilegeType which is later used by the spec.
     fn get_role_permissions(&mut self, _role: &str) -> Vec<Privilege> {
         let rows = self
             .client
@@ -151,6 +162,8 @@ impl Context for PostgresClient {
             let privs = grp
                 .into_iter()
                 .map(|row| match row.get::<_, String>(4).as_str() {
+                    // TODO: Each ObjectKind should have an associated function
+                    // to convert the raw privilege to a PrivilegeType
                     "SELECT" => PrivilegeType::Read,
                     "INSERT" => PrivilegeType::Write,
                     _ => PrivilegeType::Write,

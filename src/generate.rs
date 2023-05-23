@@ -1,10 +1,10 @@
 use crate::context::{Context, DatabaseObject, Privilege, RoleAttribute, RoleMembership};
 use crate::spec::DatabaseSpec;
-use log::{error, info};
+use log::info;
 
 use anyhow::Result;
 
-pub fn generate_spec<T: Context>(mut context: T) -> Result<DatabaseSpec>
+pub fn generate_spec<T: Context>(mut context: T) -> Result<String>
 where
     <T as crate::context::Context>::RoleAttribute: RoleAttribute,
 {
@@ -37,14 +37,14 @@ where
         spec.add_privileges(role, &privs[i]);
     }
 
-    match spec.to_yaml() {
-        Ok(yaml) => println!("{}", yaml),
+    let yaml = match spec.to_yaml() {
+        Ok(yaml) => yaml,
         Err(e) => {
-            error!("Error serializing spec: {}", e);
+            panic!("Error serializing spec: {}", e);
         }
     };
 
-    Ok(spec)
+    Ok(yaml)
 }
 
 #[cfg(test)]
@@ -56,6 +56,6 @@ mod tests {
     fn test_generate() {
         let context = FakeDb {};
         let spec = generate_spec(context).unwrap();
-        assert!(spec.roles.len() > 0);
+        assert!(spec.contains("roles:"), "Spec should contain roles section");
     }
 }

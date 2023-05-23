@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 pub const Q_ALL_MEMBERSHIPS: &str = "
 SELECT
   auth_member.rolname AS member,
@@ -77,7 +76,8 @@ FROM pg_authid
 WHERE rolname  NOT LIKE 'pg_%';
 ";
 
-pub const Q_GET_DEFAULT_PERMISSIONS: &str = " WITH relkind_mapping (objkey, objkind) AS (
+pub const Q_GET_DEFAULT_PERMISSIONS: &str = "
+WITH relkind_mapping (objkey, objkind) AS (
         VALUES ('f', 'functions'),
                ('r', 'tables'),
                ('S', 'sequences'),
@@ -176,61 +176,3 @@ pub const Q_RAW_OBJECT_ATTRIBUTES: &str = "
 
     ;
     ";
-
-pub const Q_GET_ALL_CURRENT_NONDEFAULTS: &str = "
-    WITH relkind_mapping (objkey, objkind) AS (
-        VALUES ('r', 'tables'),
-               ('v', 'tables'),
-               ('m', 'tables'),
-               ('f', 'tables'),
-               ('S', 'sequences')
-    ), tables_and_sequences AS (
-        SELECT
-            nsp.nspname AS schema,
-            c.relname AS unqualified_name,
-            map.objkind,
-            (aclexplode(c.relacl)).grantee AS grantee_oid,
-            t_owner.rolname AS owner,
-            (aclexplode(c.relacl)).privilege_type
-        FROM
-            pg_class c
-            JOIN pg_authid t_owner
-                ON c.relowner = t_owner.OID
-            JOIN pg_namespace nsp
-                ON c.relnamespace = nsp.oid
-            JOIN relkind_mapping map
-                ON c.relkind = map.objkey
-        WHERE
-            nsp.nspname NOT LIKE 'pg\\_t%'
-            AND c.relacl IS NOT NULL
-    ), schemas AS (
-        SELECT
-             nsp.nspname AS schema,
-             NULL::TEXT AS unqualified_name,
-             'schemas'::TEXT AS objkind,
-             (aclexplode(nsp.nspacl)).grantee AS grantee_oid,
-             t_owner.rolname AS owner,
-             (aclexplode(nsp.nspacl)).privilege_type
-        FROM pg_namespace nsp
-        JOIN pg_authid t_owner
-            ON nsp.nspowner = t_owner.OID
-    ), combined AS (
-        SELECT *
-        FROM tables_and_sequences
-        UNION ALL
-        SELECT *
-        FROM schemas
-    )
-    SELECT
-        t_grantee.rolname AS grantee,
-        combined.objkind,
-        combined.schema,
-        combined.unqualified_name,
-        combined.privilege_type
-    FROM
-        combined
-        JOIN pg_authid t_grantee
-            ON combined.grantee_oid = t_grantee.oid
-        WHERE combined.owner != t_grantee.rolname
-    ;
-";
