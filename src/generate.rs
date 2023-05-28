@@ -1,4 +1,6 @@
-use crate::context::{Context, DatabaseObject, Privilege, RoleAttribute, RoleMembership};
+use crate::context::{
+    Context, DatabaseObject, DefaultPrivilege, Privilege, RoleAttribute, RoleMembership,
+};
 use crate::spec::DatabaseSpec;
 use log::info;
 
@@ -29,12 +31,17 @@ where
         .iter()
         .map(|r| context.get_role_permissions(r))
         .collect();
+    let defaults: Vec<Vec<DefaultPrivilege>> = roles
+        .iter()
+        .map(|r| context.get_default_permissions(r))
+        .collect();
 
     for (i, role) in roles.iter().enumerate() {
         spec.add_role(role, &attrs[i]);
         spec.add_memberships(role, &memberships[i]);
         spec.add_ownerships(role, &owners[i]);
         spec.add_privileges(role, &privs[i]);
+        spec.add_defaults(role, &defaults[i]);
     }
 
     let yaml = match spec.to_yaml() {

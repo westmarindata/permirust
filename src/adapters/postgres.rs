@@ -1,6 +1,6 @@
 //! Postgres context implementation
 use crate::context::{
-    Context, DatabaseObject, ObjectKind, Privilege, PrivilegeType, RoleAttribute,
+    Context, DatabaseObject, DefaultPrivilege, ObjectKind, Privilege, RoleAttribute,
 };
 use itertools::Itertools;
 use log::debug;
@@ -131,7 +131,7 @@ impl Context for PostgresClient {
     ///
     /// The raw privilege, e.g. SELECT, INSERT, UPDATE, USAGE is mapped
     /// to a PrivilegeType which is later used by the spec.
-    fn get_role_permissions(&mut self, _role: &str) -> Vec<Privilege> {
+    fn get_role_permissions(&mut self, role: &str) -> Vec<Privilege> {
         let rows = self
             .client
             .query(crate::queries::Q_OBJ_PERMISSIONS_BY_ROLE, &[])
@@ -140,7 +140,7 @@ impl Context for PostgresClient {
         // Each database object can have 1+ privileges
         let grouped_rows: HashMap<_, Vec<_>> = rows
             .iter()
-            .filter(|row| row.get::<_, String>(0) == _role)
+            .filter(|row| row.get::<_, String>(0) == role)
             .group_by(|row| {
                 let kind = ObjectKind::from(row.get::<_, String>(1).as_str());
                 let schema = row.get::<_, String>(2);
@@ -161,17 +161,54 @@ impl Context for PostgresClient {
             debug!("Processing object {:?}", object);
             let privs = grp
                 .into_iter()
-                .map(|row| match row.get::<_, String>(4).as_str() {
-                    // TODO: Each ObjectKind should have an associated function
-                    // to convert the raw privilege to a PrivilegeType
-                    "SELECT" => PrivilegeType::Read,
-                    "INSERT" => PrivilegeType::Write,
-                    _ => PrivilegeType::Write,
-                })
+                .map(|row| object.kind.to_privilege(&row.get::<_, String>(4)))
                 .collect();
             debug!("Privs: {:?}", privs);
             permissions.push(Privilege { object, privs });
         }
+        permissions
+    }
+
+    fn get_default_permissions(&mut self, role: &str) -> Vec<DefaultPrivilege> {
+        let rows = self
+            .client
+            .query(crate::queries::Q_GET_DEFAULT_PERMISSIONS, &[])
+            .unwrap();
+
+        let grouped_rows: HashMap<_, Vec<_>> = rows
+            .iter()
+            .filter(|row| row.get::<_, String>(0) == role)
+            .group_by(|row| {
+                let kind = ObjectKind::from(row.get::<_, String>(1).as_str());
+                let schema = row.get::<_, String>(3);
+                (
+                    DatabaseObject {
+                        kind: ObjectKind::Schema,
+                        schema,
+                        unqualified_name: None,
+                    },
+                    kind,
+                )
+            })
+            .into_iter()
+            .map(|(key, group)| (key, group.collect()))
+            .collect();
+
+        let mut permissions = vec![];
+        for (object, grp) in grouped_rows {
+            debug!("Processing object {:?}", object);
+            let privs = grp
+                .into_iter()
+                .map(|row| object.1.to_privilege(&row.get::<_, String>(4)))
+                .collect();
+            debug!("Privs: {:?}", privs);
+            permissions.push(DefaultPrivilege {
+                parent: object.0,
+                child: object.1,
+                privs,
+            });
+        }
+
         permissions
     }
 }

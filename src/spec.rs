@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::context::{
-    Attributes, DatabaseObject, ObjectKind, Privilege, RoleAttribute, RoleMembership,
+    Attributes, DatabaseObject, DefaultPrivilege, ObjectKind, Privilege, RoleAttribute,
+    RoleMembership,
 };
 
 pub type RoleSpec = HashMap<String, Role>;
@@ -89,6 +90,12 @@ impl DatabaseSpec {
             }
             _ => panic!("Unknown object kind: {}", p.object.kind),
         });
+    }
+
+    pub fn add_defaults(&mut self, name: &str, defaults: &[DefaultPrivilege]) {
+        let role = self.roles.get_mut(name).unwrap();
+        println!("Defaults: {:?}", defaults);
+        todo!();
     }
 }
 

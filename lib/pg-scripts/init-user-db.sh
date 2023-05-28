@@ -12,10 +12,15 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     CREATE SCHEMA marketing;
     CREATE SCHEMA reports;
 
+    CREATE TABLE finance.Q1_revenue();
+    CREATE TABLE finance.Q1_margin();
     CREATE TABLE finance.Q2_revenue();
     CREATE TABLE finance.Q2_margin();
+
     CREATE TABLE marketing.ad_spend();
+    CREATE TABLE marketing.more_ads();
     CREATE TABLE reports.some_report();
+    CREATE TABLE reports.other_report();
 
     CREATE SEQUENCE reports.Q2_revenue_seq;
 
