@@ -1,9 +1,12 @@
 use std::path::PathBuf;
+use std::process::exit;
 
 use clap::{Parser, Subcommand};
+use log::error;
 use log::info;
 use permirust::adapters::fakedb::FakeDb;
 use permirust::adapters::postgres::PostgresClient;
+use permirust::analyzer::role_analyzer;
 use permirust::generate::generate_spec;
 
 #[derive(Parser)]
@@ -26,6 +29,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Generate {},
+    Configure {},
 }
 
 fn main() {
@@ -39,20 +43,63 @@ fn main() {
     match &cli.command {
         Some(Commands::Generate {}) => {
             info!("Generating...");
-            let res = match cli.adapter.as_str() {
+            match cli.adapter.as_str() {
                 "postgres" => {
                     let conn_str = "host=localhost port=54321 user=postgres password=password";
-                    let db = PostgresClient::new(&conn_str);
-                    generate_spec(db).expect("Failed to generate spec")
+                    match PostgresClient::new(conn_str) {
+                        Ok(db) => {
+                            let spec = generate_spec(db).expect("Failed to generate spec");
+                            info!("Successfully generated spec {}", spec);
+                        }
+                        Err(e) => {
+                            error!("Failed to connect to database: {}", e);
+                            error!("Please check your connection string and try again");
+                            exit(1);
+                        }
+                    }
                 }
                 "fake" => {
                     let db = FakeDb {};
-                    generate_spec(db).expect("Failed to generate spec")
+                    generate_spec(db).expect("Failed to generate spec");
                 }
                 _ => panic!("Unknown adapter"),
             };
+        }
 
-            println!("Result: {}", res);
+        Some(Commands::Configure {}) => {
+            info!("Configuring...");
+            let fpath = "./resources/spec.yml";
+            let mut spec = match permirust::spec::DatabaseSpec::read_file(fpath) {
+                Ok(spec) => {
+                    info!("Successfully read spec");
+                    spec
+                }
+                Err(e) => panic!("Failed to read spec file: {}", e),
+            };
+
+            let mut sql: Vec<String> = vec![];
+
+            match spec.adapter.as_str() {
+                "postgres" => {
+                    let conn_str = "host=localhost port=54321 user=postgres password=password";
+
+                    match PostgresClient::new(conn_str) {
+                        Ok(db) => {
+                            info!("Successfully connected to database");
+                            role_analyzer(&mut sql, db, &mut spec)
+                                .expect("Failed to analyze roles");
+                            info!("Successfully analyzed roles");
+                            println!("Sql: {:?}", sql)
+                        }
+                        Err(e) => {
+                            error!("Failed to connect to database: {}", e);
+                            error!("Please check your connection string and try again");
+                            exit(1);
+                        }
+                    }
+                }
+                _ => panic!("Unknown adapter"),
+            }
         }
         None => println!("No subcommand was used"),
     }

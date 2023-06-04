@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use anyhow::{Context, Result};
+use serde::{Deserialize, Deserializer, Serialize};
+use std::{collections::HashMap, fmt::Display};
 
 use crate::context::{
     Attributes, DatabaseObject, ObjectKind, Privilege, RoleAttribute, RoleMembership,
@@ -21,6 +22,12 @@ impl DatabaseSpec {
             adapter: adapter.to_string(),
             roles: Default::default(),
         }
+    }
+
+    pub fn read_file(path: &str) -> Result<DatabaseSpec> {
+        let file = std::fs::File::open(path)
+            .with_context(|| format!("Failed to open spec file: {}", path))?;
+        serde_yaml::from_reader(file).map_err(|e| e.into())
     }
 
     pub fn add_role(&mut self, name: &str, role: &impl RoleAttribute) {
@@ -92,29 +99,75 @@ impl DatabaseSpec {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+fn deserialize_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    match s.as_ref() {
+        "yes" => Ok(true),
+        "no" => Ok(false),
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(serde::de::Error::custom("expected yes or no")),
+    }
+}
+
+fn yes() -> bool {
+    true
+}
+
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct Role {
+    #[serde(deserialize_with = "crate::spec::deserialize_bool")]
+    #[serde(default = "yes")]
     pub can_login: bool,
+    #[serde(deserialize_with = "crate::spec::deserialize_bool")]
+    #[serde(default)]
     pub is_superuser: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub member_of: Vec<String>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Ownership::is_empty")]
     pub owns: Ownership,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Privileges::is_empty")]
     pub privileges: Privileges,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Ownership {
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub schemas: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub tables: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub sequences: Vec<String>,
 }
 
 impl Default for Ownership {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Display for Ownership {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = String::new();
+        if !self.schemas.is_empty() {
+            s.push_str(&format!("SC: {}. ", self.schemas.join(", ")));
+        }
+        if !self.tables.is_empty() {
+            s.push_str(&format!("TB: {}. ", self.tables.join(", ")));
+        }
+        if !self.sequences.is_empty() {
+            s.push_str(&format!("SQ: {}. ", self.sequences.join(", ")));
+        }
+        write!(f, "{}", s)
     }
 }
 impl Ownership {
@@ -127,13 +180,16 @@ impl Ownership {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct Privileges {
     #[serde(skip_serializing_if = "SchemaPrivileges::is_empty")]
+    #[serde(default)]
     pub schemas: SchemaPrivileges,
     #[serde(skip_serializing_if = "TablePrivileges::is_empty")]
+    #[serde(default)]
     pub tables: TablePrivileges,
     #[serde(skip_serializing_if = "SequencePrivileges::is_empty")]
+    #[serde(default)]
     pub sequences: SequencePrivileges,
 }
 
@@ -167,27 +223,33 @@ trait ObjectPrivileges {
     fn write(&self) -> &Vec<String>;
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SchemaPrivileges {
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub read: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub write: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 pub struct TablePrivileges {
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub read: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub write: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SequencePrivileges {
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub read: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub write: Vec<String>,
 }
 
@@ -212,6 +274,19 @@ impl IsEmpty for SequencePrivileges {
         self.read.is_empty() && self.write.is_empty()
     }
 }
+
+impl IsEmpty for Ownership {
+    fn is_empty(&self) -> bool {
+        self.schemas.is_empty() && self.tables.is_empty() && self.sequences.is_empty()
+    }
+}
+
+impl IsEmpty for Privileges {
+    fn is_empty(&self) -> bool {
+        self.schemas.is_empty() && self.tables.is_empty() && self.sequences.is_empty()
+    }
+}
+
 impl DatabaseSpec {
     pub fn to_yaml(&self) -> Result<String, serde_yaml::Error> {
         serde_yaml::to_string(&self)

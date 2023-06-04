@@ -24,6 +24,11 @@ pub trait Context {
     fn get_role_ownerships(&mut self, role: &str) -> Vec<DatabaseObject>;
 
     fn get_role_permissions(&mut self, role: &str) -> Vec<Privilege>;
+
+    // TODO: Confusing to have spec::Role and context::Role, consider renaming
+    fn analyze_attributes(&mut self, name: &str, role: &crate::spec::Role) -> Vec<String>;
+
+    fn analyze_memberships(&mut self, name: &str, role: &crate::spec::Role) -> Vec<String>;
 }
 
 /// Represents a Role or a User
@@ -73,7 +78,7 @@ impl RoleMembership {
 
 /// Database objects are given a struct in order to deal with quoting
 /// of object names.
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct DatabaseObject {
     pub kind: ObjectKind,
     pub schema: String,
@@ -107,7 +112,7 @@ impl DatabaseObject {
 
 /// Represents a particular database object. Currently any object
 /// on a database is represented here, but this could be split out by database
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub enum ObjectKind {
     Schema,
     Table,

@@ -2,10 +2,11 @@
 use crate::context::{
     Context, DatabaseObject, ObjectKind, Privilege, PrivilegeType, RoleAttribute,
 };
+use anyhow::Result;
 use itertools::Itertools;
 use log::debug;
 use postgres::NoTls;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub struct PostgresClient {
     client: postgres::Client,
@@ -22,16 +23,37 @@ impl PostgresClient {
     /// use permirust::adapters::postgres::PostgresClient;
     /// let client = PostgresClient::new("host=localhost user=postgres password=password port=54321");
     /// ```
-    pub fn new(connection_str: &str) -> Self {
-        let client = postgres::Client::connect(connection_str, NoTls).unwrap();
-        PostgresClient { client }
+    pub fn new(connection_str: &str) -> Result<Self> {
+        let client = postgres::Client::connect(connection_str, NoTls)?;
+        Ok(PostgresClient { client })
+    }
+
+    pub fn query(
+        &mut self,
+        query: &str,
+        params: &[&(dyn postgres::types::ToSql + Sync)],
+    ) -> Result<Vec<postgres::Row>> {
+        debug!("Executing query: {}", query);
+        let rows = self.client.query(query, params)?;
+        Ok(rows)
     }
 }
 
+#[derive(Debug)]
 pub struct PostgresRoleAttributes {
     enabled: bool,
     superuser: bool,
     createdb: bool,
+}
+
+impl PostgresRoleAttributes {
+    pub fn new(enabled: bool, superuser: bool) -> Self {
+        PostgresRoleAttributes {
+            enabled,
+            superuser,
+            createdb: false,
+        }
+    }
 }
 impl RoleAttribute for PostgresRoleAttributes {
     fn get_attributes(&self) -> Vec<crate::context::Attributes> {
@@ -56,7 +78,6 @@ impl Context for PostgresClient {
     }
     fn get_roles(&mut self) -> Vec<String> {
         let rows = &self
-            .client
             .query(crate::queries::Q_GET_ROLE_ATTRIBUTES, &[])
             .unwrap();
         rows.iter().map(|row| row.get(0)).collect()
@@ -64,7 +85,6 @@ impl Context for PostgresClient {
 
     fn get_role_attributes(&mut self, role: &str) -> PostgresRoleAttributes {
         let rows = &self
-            .client
             .query(crate::queries::Q_GET_ROLE_ATTRIBUTES, &[])
             .unwrap();
 
@@ -82,7 +102,6 @@ impl Context for PostgresClient {
 
     fn get_role_memberships(&mut self, role: &str) -> crate::context::RoleMembership {
         let members = self
-            .client
             .query(crate::queries::Q_ALL_MEMBERSHIPS, &[])
             .unwrap()
             .iter()
@@ -101,8 +120,7 @@ impl Context for PostgresClient {
     }
 
     fn get_role_ownerships(&mut self, role: &str) -> Vec<DatabaseObject> {
-        self.client
-            .query(crate::queries::Q_RAW_OBJECT_ATTRIBUTES, &[])
+        self.query(crate::queries::Q_RAW_OBJECT_ATTRIBUTES, &[])
             .unwrap()
             .iter()
             .filter_map(|row| {
@@ -133,7 +151,6 @@ impl Context for PostgresClient {
     /// to a PrivilegeType which is later used by the spec.
     fn get_role_permissions(&mut self, _role: &str) -> Vec<Privilege> {
         let rows = self
-            .client
             .query(crate::queries::Q_OBJ_PERMISSIONS_BY_ROLE, &[])
             .unwrap();
 
@@ -173,5 +190,49 @@ impl Context for PostgresClient {
             permissions.push(Privilege { object, privs });
         }
         permissions
+    }
+
+    fn analyze_attributes(&mut self, name: &str, spec_role: &crate::spec::Role) -> Vec<String> {
+        let mut sql = vec![];
+        let current = self.get_role_attributes(name);
+
+        if current.enabled != spec_role.can_login {
+            if spec_role.can_login {
+                sql.push(format!("ALTER ROLE {} LOGIN", name));
+            } else {
+                sql.push(format!("ALTER ROLE {} NOLOGIN", name));
+            }
+        }
+
+        if current.superuser != spec_role.is_superuser {
+            if spec_role.is_superuser {
+                sql.push(format!("ALTER ROLE {} SUPERUSER", name));
+            } else {
+                sql.push(format!("ALTER ROLE {} NOSUPERUSER", name));
+            }
+        }
+
+        sql
+    }
+
+    fn analyze_memberships(&mut self, name: &str, spec_role: &crate::spec::Role) -> Vec<String> {
+        let mut sql = vec![];
+        let current = self.get_role_memberships(name);
+
+        let current_members: HashSet<String> = current.memberships.into_iter().collect();
+        let spec_members: HashSet<String> = spec_role.member_of.iter().cloned().collect();
+
+        let to_add: Vec<_> = spec_members.difference(&current_members).collect();
+        let to_remove: Vec<_> = current_members.difference(&spec_members).collect();
+
+        for member in to_add {
+            sql.push(format!("GRANT {} TO {}", member, name));
+        }
+
+        for member in to_remove {
+            sql.push(format!("REVOKE {} FROM {}", member, name));
+        }
+
+        sql
     }
 }

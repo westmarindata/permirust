@@ -104,6 +104,30 @@ impl Context for FakeDb {
             _ => vec![],
         }
     }
+
+    fn analyze_attributes(&mut self, name: &str, role: &crate::spec::Role) -> Vec<String> {
+        let mut sql = vec![];
+        if role.can_login {
+            sql.push(format!("ALTER ROLE {} LOGIN", name));
+        } else {
+            sql.push(format!("ALTER ROLE {} NOLOGIN", name));
+        }
+
+        if role.is_superuser {
+            sql.push(format!("ALTER ROLE {} SUPERUSER", name));
+        } else {
+            sql.push(format!("ALTER ROLE {} NOSUPERUSER", name));
+        }
+        sql
+    }
+
+    fn analyze_memberships(&mut self, name: &str, role: &crate::spec::Role) -> Vec<String> {
+        let mut sql = vec![];
+        for member in &role.member_of {
+            sql.push(format!("GRANT {} TO {}", member, name));
+        }
+        sql
+    }
 }
 
 impl RoleAttribute for FakeDbAttribute {

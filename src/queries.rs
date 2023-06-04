@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 pub const Q_ALL_MEMBERSHIPS: &str = "
 SELECT
   auth_member.rolname AS member,

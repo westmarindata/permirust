@@ -1,0 +1,13 @@
+# TODO
+
+## FakeDb
+
+- Generate Struct should:
+    [x] Fetch Attributes
+    [x] Fetch Ownership
+    [x] Fetch Permission
+    [x] Convert to Spec
+    [x] Output Speck
+    [] Use enums for adapter names
+    [] Clean up unwraps
+    [] Add context to errors
