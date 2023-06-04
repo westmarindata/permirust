@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
-use crate::context::{Attributes, Context, DatabaseObject, ObjectKind, Privilege, RoleMembership};
+use crate::context::{
+    Attributes, Context, DatabaseObject, DefaultPrivilege, ObjectKind, Privilege, RoleMembership,
+};
 use crate::context::{PrivilegeType::*, RoleAttribute};
 
 /// A fake database context for testing
@@ -127,6 +129,10 @@ impl Context for FakeDb {
             sql.push(format!("GRANT {} TO {}", member, name));
         }
         sql
+    }
+
+    fn get_default_permissions(&mut self, role: &str) -> Vec<DefaultPrivilege> {
+        vec![]
     }
 }
 

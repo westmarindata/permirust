@@ -29,6 +29,8 @@ pub trait Context {
     fn analyze_attributes(&mut self, name: &str, role: &crate::spec::Role) -> Vec<String>;
 
     fn analyze_memberships(&mut self, name: &str, role: &crate::spec::Role) -> Vec<String>;
+
+    fn get_default_permissions(&mut self, role: &str) -> Vec<DefaultPrivilege>;
 }
 
 /// Represents a Role or a User
@@ -143,6 +145,43 @@ impl fmt::Display for ObjectKind {
     }
 }
 
+impl ObjectKind {
+    pub fn to_privilege(&self, raw_privilege: &str) -> PrivilegeType {
+        match self {
+            ObjectKind::Schema => match raw_privilege {
+                "USAGE" => PrivilegeType::Read,
+                "CREATE" => PrivilegeType::Write,
+                _ => panic!("Unknown privilege: {}", raw_privilege),
+            },
+            ObjectKind::Table => match raw_privilege {
+                "SELECT" => PrivilegeType::Read,
+                "INSERT" => PrivilegeType::Write,
+                "UPDATE" => PrivilegeType::Write,
+                "DELETE" => PrivilegeType::Write,
+                "TRUNCATE" => PrivilegeType::Write,
+                "REFERENCES" => PrivilegeType::Read,
+                "TRIGGER" => PrivilegeType::Write,
+                _ => panic!("Unknown privilege: {}", raw_privilege),
+            },
+            ObjectKind::View => match raw_privilege {
+                "SELECT" => PrivilegeType::Read,
+                "INSERT" => PrivilegeType::Write,
+                "UPDATE" => PrivilegeType::Write,
+                "DELETE" => PrivilegeType::Write,
+                "TRUNCATE" => PrivilegeType::Write,
+                "REFERENCES" => PrivilegeType::Read,
+                "TRIGGER" => PrivilegeType::Write,
+                _ => panic!("Unknown privilege: {}", raw_privilege),
+            },
+            ObjectKind::Sequence => match raw_privilege {
+                "SELECT" => PrivilegeType::Read,
+                "UPDATE" => PrivilegeType::Write,
+                "USAGE" => PrivilegeType::Write,
+                _ => panic!("Unknown privilege: {}", raw_privilege),
+            },
+        }
+    }
+}
 /// These are generic Privileges that will be mapped to from underlying
 /// database grants. Different objects may have different mappings, for example
 /// USAGE may be a READ on a schema but WRITE on a sequence.
@@ -157,5 +196,14 @@ pub enum PrivilegeType {
 #[derive(Debug)]
 pub struct Privilege {
     pub object: DatabaseObject,
+    pub privs: HashSet<PrivilegeType>,
+}
+
+/// Represetns a default privlege granted on sub-objects, for example,
+/// granting SELECT on all future tables in a schema to ROLE
+#[derive(Debug)]
+pub struct DefaultPrivilege {
+    pub parent: DatabaseObject,
+    pub child: ObjectKind,
     pub privs: HashSet<PrivilegeType>,
 }
