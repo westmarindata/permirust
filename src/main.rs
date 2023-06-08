@@ -49,7 +49,8 @@ fn main() {
                     match PostgresClient::new(conn_str) {
                         Ok(db) => {
                             let spec = generate_spec(db).expect("Failed to generate spec");
-                            info!("Successfully generated spec {}", spec);
+                            info!("Successfully generated spec");
+                            println!("{}", spec);
                         }
                         Err(e) => {
                             error!("Failed to connect to database: {}", e);

@@ -199,6 +199,15 @@ pub struct Privilege {
     pub privs: HashSet<PrivilegeType>,
 }
 
+impl Privilege {
+    pub fn new(object: DatabaseObject, privs: Vec<PrivilegeType>) -> Self {
+        Privilege {
+            object,
+            privs: HashSet::from_iter(privs),
+        }
+    }
+}
+
 /// Represetns a default privlege granted on sub-objects, for example,
 /// granting SELECT on all future tables in a schema to ROLE
 #[derive(Debug)]
