@@ -10,8 +10,7 @@ pg-start: pg-stop
 		-d -v "${PWD}"/lib/pg-scripts:/docker-entrypoint-initdb.d/ \
 		postgres:15
 pg-stop:
-	docker stop permirust-postgres
-	docker rm permirust-postgres
+	docker stop permirust-postgres || docker rm permirust-postgres || true
 
 pg-conn:
 	PGPASSWORD=password psql -h localhost -p 54321 -U postgres postgres
